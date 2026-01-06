@@ -1,0 +1,7 @@
+node_modules/
+evolution-api/
+.env
+*.log
+*.txt
+dist/
+.DS_Store
