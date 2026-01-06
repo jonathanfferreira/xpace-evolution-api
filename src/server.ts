@@ -104,11 +104,11 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     }
 
                     // 4. IA COM MEMÓRIA
-                    const history = getHistory(from);
+                    const history = await getHistory(from);
                     const aiResponse = await generateResponse(msgBody, history);
 
-                    saveMessage(from, 'user', msgBody);
-                    saveMessage(from, 'model', aiResponse);
+                    await saveMessage(from, 'user', msgBody);
+                    await saveMessage(from, 'model', aiResponse);
 
                     await sendMessage(from, aiResponse);
 
