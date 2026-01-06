@@ -2,14 +2,39 @@ import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { generateResponse } from './services/ai';
-import { sendMessage } from './services/whatsapp';
+import { sendMessage, sendButtons, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
+import { getHistory, saveMessage } from './services/memory';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Configurações de Sócios
+const SOCIOS = {
+    ALCEU: '554791700812@s.whatsapp.net',
+    RUAN: '554799463474@s.whatsapp.net',
+    JHONNEY: '554784970324@s.whatsapp.net'
+};
+
 app.use(bodyParser.json());
+
+// Helpers
+function isGreeting(text: string): boolean {
+    const greetings = ['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'menu', 'iniciar', 'start', 'começar'];
+    return greetings.some(greeting => text.toLowerCase().includes(greeting));
+}
+
+function isLocationRequest(text: string): boolean {
+    const keywords = ['localização', 'onde fica', 'endereço', 'localizacao', 'como chego', 'rua', 'mapa'];
+    return keywords.some(keyword => text.toLowerCase().includes(keyword));
+}
+
+// Funções de Notificação para Sócios
+async function notifySocios(intent: string, userInfo: any) {
+    const text = `🚨 *ALERTA XPACE-BOT*\n\nUm aluno demonstrou forte interesse em: *${intent}*\nDe: ${userInfo.name || userInfo.jid}\n\nFavor entrar em contato!`;
+    await sendMessage(SOCIOS.ALCEU, text);
+}
 
 // Log every request to console
 app.use((req, res, next) => {
@@ -25,51 +50,101 @@ app.get('/health', (req: Request, res: Response) => {
 // Webhook Reception (Evolution API)
 app.post('/webhook', async (req: Request, res: Response) => {
     const body = req.body;
-
-    console.log('Incoming webhook:', JSON.stringify(body, null, 2));
-
-    // Evolution API sends 'event' property
     const event = body.event?.toLowerCase();
+
     if (event === 'messages.upsert' || event === 'messages_upsert') {
         const data = body.data;
 
-        // Ensure it's not a status update or from me
         if (data.key.fromMe) {
             res.sendStatus(200);
             return;
         }
 
         const from = data.key.remoteJid;
-        // Support both conversation (simple text) and extendedTextMessage (text with preview/formatting)
-        const msgBody = data.message?.conversation || data.message?.extendedTextMessage?.text;
+        const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
+        const messageKey = data.key;
+
+        // 1. EXTRAÇÃO DA MENSAGEM (Texto ou Botão)
+        let msgBody = data.message?.conversation ||
+            data.message?.extendedTextMessage?.text ||
+            data.message?.buttonsResponseMessage?.selectedDisplayText ||
+            data.message?.listResponseMessage?.title;
+
+        // Caso o usuário clique num botão, o ID também é útil
+        const buttonId = data.message?.buttonsResponseMessage?.selectedButtonId;
 
         if (msgBody) {
-            console.log(`Received message from ${from}: ${msgBody}`);
-
-            // Send 200 OK immediately
+            console.log(`Received: ${msgBody} from ${from}`);
             res.sendStatus(200);
 
-            // Processamento em Background
             (async () => {
                 try {
-                    // 1. Generate AI Response
-                    console.log('Generating AI response...');
-                    const aiResponse = await generateResponse(msgBody);
-                    console.log(`AI Response: ${aiResponse}`);
+                    // 1. REAÇÃO E STATUS (Humanização)
+                    if (isGreeting(msgBody)) {
+                        await sendReaction(from, messageKey, '💃');
+                    }
+                    await sendPresence(from, 'composing');
 
-                    // 2. Send Response via WhatsApp
-                    console.log(`Sending response to ${from}...`);
+                    // 2. TRATAMENTO DE INTERAÇÕES ESPECÍFICAS
+                    if (buttonId === 'agendar_aula') {
+                        await sendMessage(from, `Bora dançar, ${pushName}! ✨ Escolha sua modalidade aqui: \n\nhttps://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4`);
+                        return;
+                    }
+
+                    if (buttonId === 'ver_precos') {
+                        await sendMessage(from, "Nossos planos são super flexíveis! 💰 Confira a tabela e escolha o seu clicando aqui: \n\nhttps://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos");
+                        return;
+                    }
+
+                    // 3. ENVIO DE LOCALIZAÇÃO (Card do Maps)
+                    if (isLocationRequest(msgBody)) {
+                        await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville - SC");
+                        await sendMessage(from, "Aqui está nossa localização exata! Temos estacionamento próprio gratuito no local. 🚗💨");
+                        return;
+                    }
+
+                    // 4. IA COM MEMÓRIA
+                    const history = getHistory(from);
+                    const aiResponse = await generateResponse(msgBody, history);
+
+                    saveMessage(from, 'user', msgBody);
+                    saveMessage(from, 'model', aiResponse);
+
                     await sendMessage(from, aiResponse);
-                    console.log('Response sent successfully');
+
+                    // 5. MENU DE BOTÕES (Reforço)
+                    if (isGreeting(msgBody)) {
+                        await sendButtons(from, `Oi ${pushName}! Como posso te ajudar hoje?`, [
+                            { id: "agendar_aula", label: "📅 Agendar Aula" },
+                            { id: "ver_precos", label: "💰 Ver Preços" },
+                            { id: "falar_humano", label: "🙋 Falar com Humano" }
+                        ]);
+                    }
+
+                    // 6. NOTIFICAÇÃO DE INTERESSE
+                    if (msgBody.toLowerCase().includes('matricula') || msgBody.toLowerCase().includes('fechar') || buttonId === 'falar_humano') {
+                        await notifySocios(msgBody, { jid: from, name: pushName });
+                    }
+
                 } catch (error) {
                     console.error('Error processing message:', error);
                 }
             })();
             return;
         }
+
+        // 9. TRATAMENTO DE ÁUDIO (Log e Aviso)
+        if (data.message?.audioMessage) {
+            res.sendStatus(200);
+            await sendReaction(from, messageKey, '🎧');
+            await sendPresence(from, 'recording');
+            setTimeout(async () => {
+                await sendMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! Só um minutinho... 🏃‍♂️💨`);
+            }, 1000);
+            return;
+        }
     }
 
-    // For other events or unhandled messages
     res.sendStatus(200);
 });
 
