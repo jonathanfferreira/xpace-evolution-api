@@ -86,6 +86,14 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         return;
                     }
 
+                    // 0.1 COMANDO DE DEBUG (Ver Memória)
+                    if (msgBody.toLowerCase().trim() === '/debug') {
+                        const debugHistory = await getHistory(from);
+                        const debugText = JSON.stringify(debugHistory, null, 2);
+                        await sendMessage(from, `🐛 *DEBUG MEMORY* 🐛\n\n\`\`\`json\n${debugText}\n\`\`\``);
+                        return;
+                    }
+
                     // 1. REAÇÃO E STATUS (Humanização)
                     if (isGreeting(msgBody)) {
                         await sendReaction(from, messageKey, '👋');

@@ -46,7 +46,7 @@ export async function getHistory(userId: string): Promise<Message[]> {
                 FROM ai_memory 
                 WHERE user_id = $1 
                 ORDER BY created_at DESC 
-                LIMIT 10
+                LIMIT 30
             ) sub 
             ORDER BY created_at ASC
         `, [userId]);
