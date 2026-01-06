@@ -1,9 +1,9 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
+import { getHistory, saveMessage, clearHistory } from './services/memory';
 import { generateResponse } from './services/ai';
 import { sendMessage, sendButtons, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
-import { getHistory, saveMessage } from './services/memory';
 
 dotenv.config();
 
@@ -79,9 +79,16 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
             (async () => {
                 try {
+                    // 0. COMANDO DE RESET (Debug)
+                    if (msgBody.toLowerCase().trim() === '/reset') {
+                        await clearHistory(from);
+                        await sendMessage(from, "🧠 Memória reiniciada com sucesso! Começando do zero.");
+                        return;
+                    }
+
                     // 1. REAÇÃO E STATUS (Humanização)
                     if (isGreeting(msgBody)) {
-                        await sendReaction(from, messageKey, '💃');
+                        await sendReaction(from, messageKey, '👋');
                     }
                     await sendPresence(from, 'composing');
 
@@ -104,13 +111,21 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     }
 
                     // 4. IA COM MEMÓRIA
+                    // Debug: Ver o que está indo para o histórico
                     const history = await getHistory(from);
+                    console.log(`[DEBUG] History for ${from}:`, JSON.stringify(history));
+
                     const aiResponse = await generateResponse(msgBody, history);
 
-                    await saveMessage(from, 'user', msgBody);
-                    await saveMessage(from, 'model', aiResponse);
+                    // Se a IA devolver uma mensagem de erro explícita (iniciada com "Erro:"), não salvamos na memória para não poluir
+                    if (!aiResponse.startsWith("Erro:")) {
+                        await saveMessage(from, 'user', msgBody);
+                        await saveMessage(from, 'model', aiResponse);
+                    }
 
                     await sendMessage(from, aiResponse);
+
+                    // ...
 
                     // 5. MENU DE BOTÕES (Apenas se for início ou solicitado explicitamente)
                     // Removido o envio automático ao final de cada mensagem para não poluir o chat.

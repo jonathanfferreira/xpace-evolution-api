@@ -116,6 +116,7 @@ export async function generateResponse(prompt: string, history: any[] = [], cont
         return "Desculpe, não consegui processar sua resposta agora.";
     } catch (error: any) {
         console.error("Error calling Gemini API:", error?.response?.data || error.message);
-        return "Ocorreu um erro interno ao processar sua mensagem.";
+        const errorDetails = error?.response?.data ? JSON.stringify(error.response.data) : error.message;
+        return `Erro: Ocorreu um erro interno na IA.\nDetalhes: ${errorDetails}`;
     }
 }
