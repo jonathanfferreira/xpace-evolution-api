@@ -112,20 +112,22 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 if (isGreeting(msgBody) || buttonId === 'btn_back_menu') {
                     userFlow.delete(from);
                     await sendReaction(from, messageKey, '👋');
-                    await sendList(from,
-                        `Olá, ${pushName}! 👋`,
-                        "Sou o X-Bot da XPACE. Como posso te ajudar?",
-                        "Ver Opções",
-                        [{
-                            title: "Menu Principal",
-                            rows: [
-                                { id: "flow_dance", title: "💃 Quero Dançar", description: "Encontrar minha turma" },
-                                { id: "flow_prices", title: "💰 Planos e Preços", description: "Tabela 2026" },
-                                { id: "flow_address", title: "📍 Localização", description: "Como chegar" },
-                                { id: "flow_human", title: "🙋 Falar com Humano", description: "Chamar a equipe" }
-                            ]
-                        }]
-                    );
+                    await sendMessage(from, `Olá, ${pushName}! 👋\n\nSou o *X-Bot* da XPACE. Como posso te ajudar hoje?`);
+                    await sendButtons(from, "Escolha uma opção:", [
+                        { id: "flow_dance", label: "💃 Quero Dançar" },
+                        { id: "flow_prices", label: "💰 Ver Preços" },
+                        { id: "flow_more", label: "📋 Mais Opções" }
+                    ]);
+                    return;
+                }
+
+                // Sub-menu para Mais Opções
+                if (buttonId === 'flow_more') {
+                    await sendButtons(from, "Outras opções:", [
+                        { id: "flow_address", label: "📍 Localização" },
+                        { id: "flow_human", label: "🙋 Falar com Humano" },
+                        { id: "btn_back_menu", label: "🔙 Voltar" }
+                    ]);
                     return;
                 }
 
