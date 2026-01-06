@@ -38,15 +38,22 @@ export async function sendButtons(to: string, text: string, buttons: { id: strin
 
     if (!text || !buttons || buttons.length === 0) return;
 
+    // Converter para o formato correto da Evolution API v2
+    const formattedButtons = buttons.map(btn => ({
+        type: "reply",
+        buttonId: btn.id,
+        buttonText: { displayText: btn.label }
+    }));
+
     try {
         await axios.post(
             `${serverUrl}/message/sendButtons/${instanceName}`,
             {
                 number: to,
-                text: text,
-                buttons: buttons,
-                delay: 1200,
-                linkPreview: true
+                title: "XPACE",
+                description: text,
+                buttons: formattedButtons,
+                delay: 1200
             },
             {
                 headers: {

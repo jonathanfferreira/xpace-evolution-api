@@ -107,99 +107,109 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 }
 
                 // ----------------------------------------------------
-                // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, Voltar)
+                // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, 0)
                 // ----------------------------------------------------
-                if (isGreeting(msgBody) || buttonId === 'btn_back_menu') {
+                if (isGreeting(msgBody) || msgBody?.trim() === '0') {
                     userFlow.delete(from);
                     await sendReaction(from, messageKey, '👋');
-                    await sendMessage(from, `Olá, ${pushName}! 👋\n\nSou o *X-Bot* da XPACE. Como posso te ajudar hoje?`);
-                    await sendButtons(from, "Escolha uma opção:", [
-                        { id: "flow_dance", label: "💃 Quero Dançar" },
-                        { id: "flow_prices", label: "💰 Ver Preços" },
-                        { id: "flow_more", label: "📋 Mais Opções" }
-                    ]);
-                    return;
-                }
-
-                // Sub-menu para Mais Opções
-                if (buttonId === 'flow_more') {
-                    await sendButtons(from, "Outras opções:", [
-                        { id: "flow_address", label: "📍 Localização" },
-                        { id: "flow_human", label: "🙋 Falar com Humano" },
-                        { id: "btn_back_menu", label: "🔙 Voltar" }
-                    ]);
+                    await sendMessage(from,
+                        `Olá, ${pushName}! 👋\n\n` +
+                        `Sou o *X-Bot* da XPACE. Como posso te ajudar?\n\n` +
+                        `*1️⃣* Quero Dançar\n` +
+                        `*2️⃣* Ver Preços\n` +
+                        `*3️⃣* Localização\n` +
+                        `*4️⃣* Falar com Humano\n\n` +
+                        `_Digite o número da opção desejada._`
+                    );
+                    userFlow.set(from, { step: 'MENU_MAIN' });
                     return;
                 }
 
                 // ----------------------------------------------------
-                // 🔵 2. FLUXO DE DANÇA (Diagnóstico)
+                // 🔵 2. TRATAMENTO DOS NÚMEROS DO MENU
                 // ----------------------------------------------------
-                if (buttonId === 'flow_dance') {
-                    userFlow.set(from, { step: 'ASK_EXPERIENCE' });
-                    await sendButtons(from, "Que massa! 🤩 Para te recomendar a turma certa, me diz:", [
-                        { id: "exp_beginner", label: "👶 Nunca dancei" },
-                        { id: "exp_intermediate", label: "🕺 Já danço" }
-                    ]);
-                    return;
+                const currentState = userFlow.get(from);
+                const trimmedMsg = msgBody?.trim();
+
+                // Menu Principal -> Escolha
+                if (currentState?.step === 'MENU_MAIN') {
+                    if (trimmedMsg === '1') {
+                        // Fluxo Dançar
+                        await sendMessage(from,
+                            `Que demais! 🤩 Para indicar a turma certa:\n\n` +
+                            `*1️⃣* Nunca dancei (Iniciante)\n` +
+                            `*2️⃣* Já danço / Tenho noção\n\n` +
+                            `_Digite 1 ou 2_`
+                        );
+                        userFlow.set(from, { step: 'ASK_EXPERIENCE' });
+                        return;
+                    }
+                    if (trimmedMsg === '2') {
+                        // Preços
+                        await sendMessage(from,
+                            `💰 *Investimento XPACE (2026)*\n\n` +
+                            `💎 *Anual:* R$ 165/mês (Melhor!)\n` +
+                            `💳 *Mensal:* R$ 215/mês\n` +
+                            `🎟️ *Avulso:* R$ 50\n\n` +
+                            `📝 Matricule-se: https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
+                            `_Digite 0 para voltar ao menu._`
+                        );
+                        return;
+                    }
+                    if (trimmedMsg === '3') {
+                        // Localização
+                        await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville");
+                        await sendMessage(from, "Estacionamento gratuito! 🚗\n\n_Digite 0 para voltar ao menu._");
+                        return;
+                    }
+                    if (trimmedMsg === '4') {
+                        // Humano
+                        await sendMessage(from, "Chamei a equipe! Alguém já vem falar com você. 🙋‍♂️");
+                        await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
+                        return;
+                    }
                 }
-                if (['exp_beginner', 'exp_intermediate'].includes(buttonId || '')) {
-                    userFlow.set(from, { step: 'ASK_GOAL', experience: buttonId });
-                    await sendButtons(from, "E o que você busca na dança?", [
-                        { id: "goal_hobby", label: "😄 Hobby/Diversão" },
-                        { id: "goal_exercise", label: "💪 Exercício" },
-                        { id: "goal_pro", label: "🏆 Profissional" }
-                    ]);
-                    return;
+
+                // Fluxo Dançar - Experiência
+                if (currentState?.step === 'ASK_EXPERIENCE') {
+                    if (trimmedMsg === '1' || trimmedMsg === '2') {
+                        const exp = trimmedMsg === '1' ? 'iniciante' : 'avancado';
+                        await sendMessage(from,
+                            `E o que você busca na dança?\n\n` +
+                            `*1️⃣* Hobby / Diversão\n` +
+                            `*2️⃣* Exercício / Suar\n` +
+                            `*3️⃣* Profissionalização\n\n` +
+                            `_Digite 1, 2 ou 3_`
+                        );
+                        userFlow.set(from, { step: 'ASK_GOAL', experience: exp });
+                        return;
+                    }
                 }
-                if (['goal_hobby', 'goal_exercise', 'goal_pro'].includes(buttonId || '')) {
-                    const state = userFlow.get(from);
-                    const exp = state?.experience === 'exp_beginner' ? 'iniciante' : 'avançado';
-                    let rec = exp === 'iniciante'
-                        ? "Para começar do zero: **Street Dance Iniciante**, **K-Pop** ou **Dança de Salão**."
-                        : "Para evoluir: **FitDance**, **Hip Hop Open Level** ou **Jazz**!";
-                    await sendMessage(from, `Perfeito! ${rec}\n\n📅 Que tal uma aula experimental grátis?`);
-                    await sendButtons(from, "Próximos passos:", [
-                        { id: "flow_schedule", label: "📅 Agendar Aula" },
-                        { id: "btn_back_menu", label: "🔙 Voltar" }
-                    ]);
-                    userFlow.delete(from);
-                    return;
+
+                // Fluxo Dançar - Objetivo -> Recomendação
+                if (currentState?.step === 'ASK_GOAL') {
+                    if (['1', '2', '3'].includes(trimmedMsg || '')) {
+                        const exp = currentState.experience;
+                        let rec = exp === 'iniciante'
+                            ? "Para começar do zero: *Street Dance Iniciante*, *K-Pop* ou *Dança de Salão*."
+                            : "Para evoluir: *FitDance*, *Hip Hop Open Level* ou *Jazz*!";
+
+                        await sendMessage(from,
+                            `Perfeito! ${rec}\n\n` +
+                            `📅 *Agende sua aula experimental grátis:*\n` +
+                            `https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n` +
+                            `_Digite 0 para voltar ao menu._`
+                        );
+                        userFlow.delete(from);
+                        return;
+                    }
                 }
 
                 // ----------------------------------------------------
-                // 🟡 3. OUTROS FLUXOS (Preço, Endereço, Humano)
+                // 🟣 IA HÍBRIDA (Fallback para dúvidas complexas)
                 // ----------------------------------------------------
-                if (buttonId === 'flow_prices') {
-                    await sendMessage(from, "💰 **Investimento XPACE (2026)**\n\n💎 Anual: R$ 165/mês\n💳 Mensal: R$ 215/mês\n🎟️ Avulso: R$ 50\n\nQuer garantir sua vaga?");
-                    await sendButtons(from, "Opções:", [
-                        { id: "link_contrato", label: "📝 Fazer Matrícula" },
-                        { id: "btn_back_menu", label: "🔙 Voltar" }
-                    ]);
-                    return;
-                }
-                if (buttonId === 'flow_address' || isLocationRequest(msgBody || '')) {
-                    await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville");
-                    await sendMessage(from, "Estacionamento gratuito! 🚗");
-                    return;
-                }
-                if (buttonId === 'flow_human') {
-                    await sendMessage(from, "Chamei a equipe! Alguém já vem falar com você. 🙋‍♂️");
-                    await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
-                    return;
-                }
-                if (buttonId === 'flow_schedule') {
-                    await sendMessage(from, "Acesse aqui: https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4");
-                    return;
-                }
-                if (buttonId === 'link_contrato') {
-                    await sendMessage(from, "Acesse aqui: https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos");
-                    return;
-                }
-
-                // ----------------------------------------------------
-                // 🟣 4. IA HÍBRIDA (Fallback para dúvidas complexas)
-                // ----------------------------------------------------
-                if (!buttonId && msgBody && msgBody.length > 2) {
+                // Se não é número nem comando, usa a IA
+                if (msgBody && msgBody.length > 2 && !['0', '1', '2', '3', '4'].includes(trimmedMsg || '')) {
                     console.log(`🤖 IA Fallback para: ${msgBody}`);
                     const history = await getHistory(from);
                     const aiResponse = await generateResponse(msgBody, history);
@@ -229,7 +239,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
     const currentPromise = previousPromise.then(processMessage);
     messageQueues.set(from, currentPromise);
 
-    // Limpa a fila quando terminar para liberar memória (opcional, mas bom pra evitar leak)
+    // Limpa a fila quando terminar para liberar memória
     currentPromise.catch(() => { }).finally(() => {
         if (messageQueues.get(from) === currentPromise) {
             messageQueues.delete(from);
