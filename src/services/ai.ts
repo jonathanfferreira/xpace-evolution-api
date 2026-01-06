@@ -116,6 +116,12 @@ export async function generateResponse(prompt: string, history: any[] = [], cont
         return "Desculpe, não consegui processar sua resposta agora.";
     } catch (error: any) {
         console.error("Error calling Gemini API:", error?.response?.data || error.message);
+
+        // Tratar erro de "Cota Excedida" (429) de forma amigável
+        if (error?.response?.status === 429 || JSON.stringify(error?.response?.data).includes('RESOURCE_EXHAUSTED')) {
+            return "⚠️ *Alta demanda:* Estou recebendo muitas mensagens agora! Por favor, aguarde 30 segundos e me chame novamente. ⏳";
+        }
+
         const errorDetails = error?.response?.data ? JSON.stringify(error.response.data) : error.message;
         return `Erro: Ocorreu um erro interno na IA.\nDetalhes: ${errorDetails}`;
     }
