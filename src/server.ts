@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { getHistory, saveMessage, clearHistory } from './services/memory';
 import { generateResponse } from './services/ai';
-import { sendMessage, sendButtons, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
+import { sendMessage, sendButtons, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
 
 dotenv.config();
 
@@ -50,6 +50,9 @@ app.get('/health', (req: Request, res: Response) => {
 // Queue para processar mensagens sequencialmente por usuário
 const messageQueues = new Map<string, Promise<void>>();
 
+// Estado do Fluxo de Diagnóstico por usuário
+const userFlow = new Map<string, { step: string, experience?: string }>();
+
 // Webhook Reception (Evolution API)
 app.post('/webhook', async (req: Request, res: Response) => {
     const body = req.body;
@@ -74,101 +77,148 @@ app.post('/webhook', async (req: Request, res: Response) => {
             const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
             const messageKey = data.key;
 
-            // 1. EXTRAÇÃO DA MENSAGEM (Texto ou Botão)
+            // 1. EXTRAÇÃO DA MENSAGEM (Texto ou Botão/Lista)
             let msgBody = data.message?.conversation ||
                 data.message?.extendedTextMessage?.text ||
                 data.message?.buttonsResponseMessage?.selectedDisplayText ||
                 data.message?.listResponseMessage?.title;
 
-            // Caso o usuário clique num botão, o ID também é útil
-            const buttonId = data.message?.buttonsResponseMessage?.selectedButtonId;
+            // IDs de Botão e Lista (Evolution API)
+            const buttonId = data.message?.buttonsResponseMessage?.selectedButtonId ||
+                data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
 
-            if (msgBody) {
-                console.log(`Received: ${msgBody} from ${from}`);
-
-                // 1.1 COMANDO DE RESET (Debug) - Prioridade
-                if (msgBody.toLowerCase().trim() === '/reset') {
-                    await clearHistory(from);
-                    await sendMessage(from, "🧠 Memória reiniciada com sucesso! Começando do zero.");
-                    return;
-                }
-
-                // 1.2 COMANDO DE DEBUG (Ver Memória)
-                if (msgBody.toLowerCase().trim() === '/debug') {
-                    const debugHistory = await getHistory(from);
-                    const debugText = JSON.stringify(debugHistory, null, 2);
-                    await sendMessage(from, `🐛 *DEBUG MEMORY* 🐛\n\n\`\`\`json\n${debugText}\n\`\`\``);
-                    return;
-                }
-
-                // 1.3 REAÇÃO E STATUS (Humanização)
-                if (isGreeting(msgBody)) {
-                    await sendReaction(from, messageKey, '👋');
-                }
+            if (msgBody || buttonId) {
+                console.log(`[${from}] Msg: "${msgBody}" | ButtonID: ${buttonId}`);
                 await sendPresence(from, 'composing');
 
-                // 2. TRATAMENTO DE INTERAÇÕES ESPECÍFICAS
-                if (buttonId === 'agendar_aula') {
-                    await sendMessage(from, `Bora dançar, ${pushName}! ✨ Escolha sua modalidade aqui: \n\nhttps://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4`);
+                // ----------------------------------------------------
+                // 🛑 COMANDOS DE DEBUG/RESET (Prioridade Total)
+                // ----------------------------------------------------
+                if (msgBody?.toLowerCase().trim() === '/reset') {
+                    await clearHistory(from);
+                    userFlow.delete(from);
+                    await sendMessage(from, "♻️ Tudo limpo! Memória e Fluxo reiniciados.");
+                    return;
+                }
+                if (msgBody?.toLowerCase().trim() === '/debug') {
+                    const state = userFlow.get(from);
+                    await sendMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`);
                     return;
                 }
 
-                if (buttonId === 'ver_precos') {
-                    await sendMessage(from, "Nossos planos são super flexíveis! 💰 Confira a tabela e escolha o seu clicando aqui: \n\nhttps://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos");
+                // ----------------------------------------------------
+                // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, Voltar)
+                // ----------------------------------------------------
+                if (isGreeting(msgBody) || buttonId === 'btn_back_menu') {
+                    userFlow.delete(from);
+                    await sendReaction(from, messageKey, '👋');
+                    await sendList(from,
+                        `Olá, ${pushName}! 👋`,
+                        "Sou o X-Bot da XPACE. Como posso te ajudar?",
+                        "Ver Opções",
+                        [{
+                            title: "Menu Principal",
+                            rows: [
+                                { id: "flow_dance", title: "💃 Quero Dançar", description: "Encontrar minha turma" },
+                                { id: "flow_prices", title: "💰 Planos e Preços", description: "Tabela 2026" },
+                                { id: "flow_address", title: "📍 Localização", description: "Como chegar" },
+                                { id: "flow_human", title: "🙋 Falar com Humano", description: "Chamar a equipe" }
+                            ]
+                        }]
+                    );
                     return;
                 }
 
-                // 3. ENVIO DE LOCALIZAÇÃO (Card do Maps)
-                if (isLocationRequest(msgBody)) {
-                    await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville - SC");
-                    await sendMessage(from, "Aqui está nossa localização exata! Temos estacionamento próprio gratuito no local. 🚗💨");
-                    return;
-                }
-
-                // 4. IA COM MEMÓRIA
-                const history = await getHistory(from);
-                console.log(`[DEBUG] History for ${from}:`, JSON.stringify(history));
-
-                const aiResponse = await generateResponse(msgBody, history);
-
-                // Se a IA devolver uma mensagem de erro explícita, não salvamos
-                if (!aiResponse.startsWith("Erro:") && !aiResponse.startsWith("⚠️")) {
-                    await saveMessage(from, 'user', msgBody);
-                    await saveMessage(from, 'model', aiResponse);
-                }
-
-                await sendMessage(from, aiResponse);
-
-                // ...
-
-                // 5. MENU DE BOTÕES (Apenas se for início ou solicitado explicitamente)
-                // Removido o envio automático ao final de cada mensagem para não poluir o chat.
-                // A IA deve guiar a conversa. Se o usuário quiser o menu, ele pode pedir "menu".
-                if (msgBody.toLowerCase().trim() === 'menu') {
-                    await sendButtons(from, `Aqui está nosso menu rápido:`, [
-                        { id: "agendar_aula", label: "📅 Agendar Aula" },
-                        { id: "ver_precos", label: "💰 Ver Preços" },
-                        { id: "falar_humano", label: "🙋 Falar com Humano" }
+                // ----------------------------------------------------
+                // 🔵 2. FLUXO DE DANÇA (Diagnóstico)
+                // ----------------------------------------------------
+                if (buttonId === 'flow_dance') {
+                    userFlow.set(from, { step: 'ASK_EXPERIENCE' });
+                    await sendButtons(from, "Que massa! 🤩 Para te recomendar a turma certa, me diz:", [
+                        { id: "exp_beginner", label: "👶 Nunca dancei" },
+                        { id: "exp_intermediate", label: "🕺 Já danço" }
                     ]);
+                    return;
+                }
+                if (['exp_beginner', 'exp_intermediate'].includes(buttonId || '')) {
+                    userFlow.set(from, { step: 'ASK_GOAL', experience: buttonId });
+                    await sendButtons(from, "E o que você busca na dança?", [
+                        { id: "goal_hobby", label: "😄 Hobby/Diversão" },
+                        { id: "goal_exercise", label: "💪 Exercício" },
+                        { id: "goal_pro", label: "🏆 Profissional" }
+                    ]);
+                    return;
+                }
+                if (['goal_hobby', 'goal_exercise', 'goal_pro'].includes(buttonId || '')) {
+                    const state = userFlow.get(from);
+                    const exp = state?.experience === 'exp_beginner' ? 'iniciante' : 'avançado';
+                    let rec = exp === 'iniciante'
+                        ? "Para começar do zero: **Street Dance Iniciante**, **K-Pop** ou **Dança de Salão**."
+                        : "Para evoluir: **FitDance**, **Hip Hop Open Level** ou **Jazz**!";
+                    await sendMessage(from, `Perfeito! ${rec}\n\n📅 Que tal uma aula experimental grátis?`);
+                    await sendButtons(from, "Próximos passos:", [
+                        { id: "flow_schedule", label: "📅 Agendar Aula" },
+                        { id: "btn_back_menu", label: "🔙 Voltar" }
+                    ]);
+                    userFlow.delete(from);
+                    return;
                 }
 
-                // 6. NOTIFICAÇÃO DE INTERESSE
-                if (msgBody.toLowerCase().includes('matricula') || msgBody.toLowerCase().includes('fechar') || buttonId === 'falar_humano') {
-                    await notifySocios(msgBody, { jid: from, name: pushName });
+                // ----------------------------------------------------
+                // 🟡 3. OUTROS FLUXOS (Preço, Endereço, Humano)
+                // ----------------------------------------------------
+                if (buttonId === 'flow_prices') {
+                    await sendMessage(from, "💰 **Investimento XPACE (2026)**\n\n💎 Anual: R$ 165/mês\n💳 Mensal: R$ 215/mês\n🎟️ Avulso: R$ 50\n\nQuer garantir sua vaga?");
+                    await sendButtons(from, "Opções:", [
+                        { id: "link_contrato", label: "📝 Fazer Matrícula" },
+                        { id: "btn_back_menu", label: "🔙 Voltar" }
+                    ]);
+                    return;
+                }
+                if (buttonId === 'flow_address' || isLocationRequest(msgBody || '')) {
+                    await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville");
+                    await sendMessage(from, "Estacionamento gratuito! 🚗");
+                    return;
+                }
+                if (buttonId === 'flow_human') {
+                    await sendMessage(from, "Chamei a equipe! Alguém já vem falar com você. 🙋‍♂️");
+                    await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
+                    return;
+                }
+                if (buttonId === 'flow_schedule') {
+                    await sendMessage(from, "Acesse aqui: https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4");
+                    return;
+                }
+                if (buttonId === 'link_contrato') {
+                    await sendMessage(from, "Acesse aqui: https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos");
+                    return;
+                }
+
+                // ----------------------------------------------------
+                // 🟣 4. IA HÍBRIDA (Fallback para dúvidas complexas)
+                // ----------------------------------------------------
+                if (!buttonId && msgBody && msgBody.length > 2) {
+                    console.log(`🤖 IA Fallback para: ${msgBody}`);
+                    const history = await getHistory(from);
+                    const aiResponse = await generateResponse(msgBody, history);
+                    if (!aiResponse.startsWith("Erro:")) {
+                        await saveMessage(from, 'user', msgBody);
+                        await saveMessage(from, 'model', aiResponse);
+                    }
+                    await sendMessage(from, aiResponse);
                 }
             }
 
-            // 9. TRATAMENTO DE ÁUDIO (Log e Aviso) - Moved here to be part of the queued processing
+            // Tratamento de Áudio
             if (data.message?.audioMessage) {
                 await sendReaction(from, messageKey, '🎧');
                 await sendPresence(from, 'recording');
                 setTimeout(async () => {
-                    await sendMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! Só um minutinho... 🏃‍♂️💨`);
+                    await sendMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! 🏃‍♂️`);
                 }, 1000);
-                return;
             }
         } catch (error) {
-            console.error('Error processing message:', error);
+            console.error('Erro no webhook:', error);
         }
     };
 

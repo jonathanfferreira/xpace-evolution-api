@@ -1,4 +1,3 @@
-// TODO: Integrate Gemini or OpenAI here
 import axios from 'axios';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -25,16 +24,6 @@ Seu objetivo é vender, mas com consultoria. **Não empurre links de cara.**
 1.  **Experiência:** A pessoa já dança ou é iniciante?
 2.  **Objetivo:** Quer hobby, exercício ou profissionalização?
 
-**Fluxo de Conversa:**
-A.  **Saudação:** "Olá! Bem-vindo à XPACE. Como posso ajudar?"
-B.  **Diagnóstico:** Se o aluno perguntar de aulas, **pergunte a experiência dele antes de mandar a grade.**
-    - *Ex:* "Claro! Para eu te indicar a melhor turma, me conta: você já dança ou seria sua primeira vez?"
-C.  **Recomendação:** Com base na resposta, indique a turma exata.
-    - *Ex:* "Entendi! Para iniciar, recomendo o Street Funk na sexta às 20h."
-D.  **CTA (Call to Action):** Só agora envie o link.
-    - *Ex:* "Gostaria de agendar uma aula experimental?"
-
----
 
 **IMPORTANTE: VERIFICAÇÃO DE HISTÓRICO (Memória):**
 A primeira coisa que você deve fazer ao receber uma mensagem é: **LER O HISTÓRICO ANTERIOR.**
@@ -95,26 +84,26 @@ export async function generateResponse(prompt: string, history: any[] = [], cont
     }
 
     try {
-        // Construct contents including system context, history and current prompt
-        const contents = [
-            {
-                role: 'user',
-                parts: [{ text: `INSTRUÇÕES DE SISTEMA:\n${context}` }]
+        const requestBody = {
+            system_instruction: {
+                parts: [{ text: context }]
             },
-            {
-                role: 'model',
-                parts: [{ text: "Entendido. Sou o X-Bot e seguirei todas as instruções acima para atender os alunos da XPACE com excelência." }]
-            },
-            ...history,
-            {
-                role: 'user',
-                parts: [{ text: prompt }]
+            contents: [
+                ...history,
+                {
+                    role: 'user',
+                    parts: [{ text: prompt }]
+                }
+            ],
+            generationConfig: {
+                temperature: 0.4,
+                maxOutputTokens: 600,
             }
-        ];
+        };
 
         const response = await axios.post(
             `${GEMINI_API_URL}?key=${apiKey}`,
-            { contents },
+            requestBody,
             {
                 headers: { 'Content-Type': 'application/json' }
             }
