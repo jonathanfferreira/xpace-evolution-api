@@ -112,9 +112,11 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                     await sendMessage(from, aiResponse);
 
-                    // 5. MENU DE BOTÕES (Reforço)
-                    if (isGreeting(msgBody)) {
-                        await sendButtons(from, `Oi ${pushName}! Como posso te ajudar hoje?`, [
+                    // 5. MENU DE BOTÕES (Apenas se for início ou solicitado explicitamente)
+                    // Removido o envio automático ao final de cada mensagem para não poluir o chat.
+                    // A IA deve guiar a conversa. Se o usuário quiser o menu, ele pode pedir "menu".
+                    if (msgBody.toLowerCase().trim() === 'menu') {
+                        await sendButtons(from, `Aqui está nosso menu rápido:`, [
                             { id: "agendar_aula", label: "📅 Agendar Aula" },
                             { id: "ver_precos", label: "💰 Ver Preços" },
                             { id: "falar_humano", label: "🙋 Falar com Humano" }
