@@ -76,7 +76,7 @@ export async function saveMessage(userId: string, role: 'user' | 'model', text: 
                 SELECT id FROM ai_memory 
                 WHERE user_id = $1 
                 ORDER BY created_at DESC 
-                OFFSET 20
+                OFFSET 50
             )
         `, [userId]);
 
