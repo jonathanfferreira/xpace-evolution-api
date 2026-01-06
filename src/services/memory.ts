@@ -37,10 +37,19 @@ initDb();
 
 export async function getHistory(userId: string): Promise<Message[]> {
     try {
-        const res = await pool.query(
-            'SELECT role, content FROM ai_memory WHERE user_id = $1 ORDER BY created_at ASC LIMIT 10',
-            [userId]
-        );
+        // CORREÇÃO CRÍTICA: Pegar as 10 MAIS RECENTES (DESC) e depois reordenar (ASC)
+        // Antes estava pegando as 10 PRIMEIRAS mensagens da história (sempre as antigas).
+        const res = await pool.query(`
+            SELECT role, content 
+            FROM (
+                SELECT role, content, created_at 
+                FROM ai_memory 
+                WHERE user_id = $1 
+                ORDER BY created_at DESC 
+                LIMIT 10
+            ) sub 
+            ORDER BY created_at ASC
+        `, [userId]);
 
         return res.rows.map(row => ({
             role: row.role as 'user' | 'model',
