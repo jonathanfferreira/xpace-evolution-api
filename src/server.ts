@@ -53,20 +53,41 @@ app.get('/health', (req: Request, res: Response) => {
 const messageQueues = new Map<string, Promise<void>>();
 
 // Webhook Reception (Evolution API)
+// Cache simples para evitar processamento duplicado (Message ID -> Timestamp)
+const processedMessages = new Map<string, number>();
+
+// Limpeza automática do cache a cada 1 hora
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, time] of processedMessages) {
+        if (now - time > 60000) processedMessages.delete(key);
+    }
+}, 3600000);
+
+// Webhook Reception (Evolution API)
 app.post('/webhook', async (req: Request, res: Response) => {
     const body = req.body;
     const event = body.event?.toLowerCase();
 
     if (event !== 'messages.upsert' && event !== 'messages_upsert') {
-        console.log(`[IGNORED] Event: ${event} | FromMe: ${body.data?.key?.fromMe}`);
         res.sendStatus(200);
         return;
     }
 
+    const data = body.data;
+    const messageId = data.key.id;
+
+    // DEDUPLICAÇÃO: Se já processamos essa mensagem nos últimos 10s, ignora
+    if (processedMessages.has(messageId)) {
+        console.log(`[DEDUPLICATED] Message ID ${messageId} already processed.`);
+        res.sendStatus(200);
+        return;
+    }
+    processedMessages.set(messageId, Date.now());
+
     // LOG COMPLETO PARA DEBUG
     console.log('>>> FULL WEBHOOK PAYLOAD:', JSON.stringify(body, null, 2));
 
-    const data = body.data;
     if (data.key.fromMe) {
         res.sendStatus(200);
         return;
@@ -124,11 +145,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             {
                                 title: "Navegação",
                                 rows: [
-                                    { id: "menu_menu", title: "📝 Menu Principal", description: "Voltar ao início" },
-                                    { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
-                                    { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores" },
-                                    { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
-                                    { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
+                                    // REORGANIZADO PARA NUMERAÇÃO BATER!
+                                    // 1 -> Dançar
+                                    // 2 -> Preços
+                                    // 3 -> Localização
+                                    // 4 -> Humano
+                                    { id: "menu_dance", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                    { id: "menu_prices", title: "💰 Ver Preços", description: "Planos e valores" },
+                                    { id: "menu_location", title: "📍 Localização", description: "Endereço e mapa" },
+                                    { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
                                 ]
                             }
                         ]
@@ -142,19 +167,21 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 // 🔵 2. TRATAMENTO DE ESTADO E ESCOLHAS
                 // ----------------------------------------------------
                 const currentState = await getFlowState(from);
-                const input = selectedRowId || msgBody?.trim(); // Prioriza ID do botão
+                const input = (selectedRowId || msgBody?.trim())?.toLowerCase(); // Normaliza para comparação
 
                 // Menu Principal -> Escolha
                 if (currentState?.step === 'MENU_MAIN') {
-                    if (input === 'menu_1' || input === '1') {
-                        // Iniciar Cadastro: Pergunta Nome
+
+                    // OPÇÃO 1: QUERO DANÇAR
+                    if (input === 'menu_dance' || input === '1' || input.includes('dança')) {
                         await sendProfessionalMessage(from, "Que incrível que você quer dançar com a gente! 🤩\n\nPara eu te indicar a turma perfeita, preciso te conhecer um pouquinho melhor.\n\nPrimeiro, *como você gostaria de ser chamado?*");
                         await saveFlowState(from, 'ASK_NAME');
-                        // Tag inicial
                         addLabelToConversation(from, 'prospect').catch(err => console.error(err));
                         return;
                     }
-                    if (input === 'menu_2' || input === '2') {
+
+                    // OPÇÃO 2: VER PREÇOS
+                    if (input === 'menu_prices' || input === '2' || input.includes('preço') || input.includes('valor')) {
                         await sendProfessionalMessage(from,
                             `💰 *Investimento XPACE (2026)*\n\n` +
                             `Aqui você tem flexibilidade total:\n\n` +
@@ -167,12 +194,16 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         );
                         return;
                     }
-                    if (input === 'menu_3' || input === '3') {
+
+                    // OPÇÃO 3: LOCALIZAÇÃO
+                    if (input === 'menu_location' || input === '3' || input.includes('endereço') || input.includes('local')) {
                         await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
                         await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito para alunos.\n✅ Lanchonete e espaço de convivência.\n\n_Digite 0 para voltar._");
                         return;
                     }
-                    if (input === 'menu_4' || input === '4') {
+
+                    // OPÇÃO 4: HUMANO
+                    if (input === 'menu_human' || input === '4' || input.includes('humano') || input.includes('atendente')) {
                         await sendProfessionalMessage(from, "Entendi, às vezes é bom falar com gente de verdade! 😄\n\nJá notifiquei a equipe (Alceu/Ruan/Jhonney). Em alguns instantes alguém te chama por aqui. ⏳");
                         await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
                         addLabelToConversation(from, 'human_handoff').catch(console.error);
