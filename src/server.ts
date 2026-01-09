@@ -114,6 +114,49 @@ app.post('/webhook', async (req: Request, res: Response) => {
     }
 
 
+    // ----------------------------------------------------
+    // 📞 CHAMADAS (call) - Secretária Eletrônica
+    // ----------------------------------------------------
+    if (event === 'call') {
+        const data = body.data;
+        // status pode ser 'offer', 'ringing', etc.
+        // Geralmente 'offer' é quando chama.
+        console.log(`[CALL] Incoming call from ${data.id}`);
+
+        // Extrair o JID de quem ligou (pode vir como 'from' ou dentro de 'data')
+        // Na v2 geralmente é data.id (que é o remoteJid)
+        const callerJid = data.id || data.from;
+
+        if (callerJid && !callerJid.includes('@g.us')) {
+            await sendProfessionalMessage(callerJid,
+                "🤖 *Atendimento Automático*\n\n" +
+                "Oi! Eu sou o X-Bot virtual e não consigo atender chamadas de voz/vídeo. 📵\n\n" +
+                "Por favor, *envie sua dúvida por texto ou áudio aqui no chat* que eu te respondo na hora! ⚡"
+            );
+        }
+        res.sendStatus(200);
+        return;
+    }
+
+    // ----------------------------------------------------
+    // ⌨️ PRESENÇA (presence.update) - "Digitando..."
+    // ----------------------------------------------------
+    if (event === 'presence.update' || event === 'presence_update') {
+        const data = body.data;
+        // data = { id: '...', presences: { '...': { lastKnownPresence: 'composing' } } }
+        if (data.presences) {
+            const from = Object.keys(data.presences)[0];
+            const presence = data.presences[from]?.lastKnownPresence;
+
+            if (presence === 'composing' || presence === 'recording') {
+                console.log(`[PRESENCE] ${from} is ${presence}...`);
+                // Futuro: Se parar de digitar por X tempo sem enviar msg, disparar recovery.
+            }
+        }
+        res.sendStatus(200);
+        return;
+    }
+
     if (event !== 'messages.upsert' && event !== 'messages_upsert') {
         res.sendStatus(200);
         return;
