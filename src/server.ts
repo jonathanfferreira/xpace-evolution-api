@@ -58,9 +58,13 @@ app.post('/webhook', async (req: Request, res: Response) => {
     const event = body.event?.toLowerCase();
 
     if (event !== 'messages.upsert' && event !== 'messages_upsert') {
+        console.log(`[IGNORED] Event: ${event} | FromMe: ${body.data?.key?.fromMe}`);
         res.sendStatus(200);
         return;
     }
+
+    // LOG COMPLETO PARA DEBUG
+    console.log('>>> FULL WEBHOOK PAYLOAD:', JSON.stringify(body, null, 2));
 
     const data = body.data;
     if (data.key.fromMe) {
