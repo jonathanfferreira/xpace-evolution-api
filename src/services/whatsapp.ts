@@ -2,12 +2,28 @@ import axios from 'axios';
 
 
 
+// Função Utilitária para Humanização (Digitando...)
+export async function sendProfessionalMessage(to: string, text: string) {
+    if (!text) return;
+
+    // Calcular delay baseado no tamanho do texto
+    // Mínimo 1s, Máximo 5s. Aprox 50ms por caractere.
+    const typingTime = Math.min(5000, Math.max(1000, text.length * 50));
+
+    // Enviar status "Digitando..."
+    await sendPresence(to, 'composing');
+
+    // Aguardar o tempo simulado
+    await new Promise(resolve => setTimeout(resolve, typingTime));
+
+    // Enviar a mensagem real
+    await sendMessage(to, text);
+}
+
 export async function sendMessage(to: string, text: string) {
     const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
     const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE'; // Using cloud instance name XPACE
-
-    if (!text) return;
+    const instanceName = 'XPACE';
 
     try {
         await axios.post(
@@ -15,7 +31,7 @@ export async function sendMessage(to: string, text: string) {
             {
                 number: to,
                 text: text,
-                delay: 1200,
+                delay: 0, // Delay já tratado externamente se necessário
                 linkPreview: true
             },
             {
@@ -25,7 +41,7 @@ export async function sendMessage(to: string, text: string) {
                 },
             }
         );
-        console.log(`Message sent to ${to} via Evolution API`);
+        console.log(`Message sent to ${to}`);
     } catch (error: any) {
         console.error("Error sending message:", error?.response?.data || error.message);
     }
@@ -62,7 +78,7 @@ export async function sendButtons(to: string, text: string, buttons: { id: strin
                 },
             }
         );
-        console.log(`Buttons sent to ${to} via Evolution API`);
+        console.log(`Buttons sent to ${to}`);
     } catch (error: any) {
         console.error("Error sending buttons:", error?.response?.data || error.message);
     }
@@ -76,6 +92,10 @@ export async function sendList(to: string, title: string, text: string, buttonTe
     if (!text || !sections || sections.length === 0) return;
 
     try {
+        // Humanização: Enviar "Digitando..."
+        await sendPresence(to, 'composing');
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Delay fixo para listas
+
         await axios.post(
             `${serverUrl}/message/sendList/${instanceName}`,
             {
@@ -83,8 +103,15 @@ export async function sendList(to: string, title: string, text: string, buttonTe
                 title: title,
                 text: text,
                 buttonText: buttonText,
-                sections: sections,
-                delay: 1200
+                sections: sections.map(section => ({
+                    title: section.title,
+                    rows: section.rows.map(row => ({
+                        title: row.title,
+                        description: row.description,
+                        rowId: row.id
+                    }))
+                })),
+                delay: 0
             },
             {
                 headers: {
@@ -93,7 +120,7 @@ export async function sendList(to: string, title: string, text: string, buttonTe
                 },
             }
         );
-        console.log(`List sent to ${to} via Evolution API`);
+        console.log(`List sent to ${to}`);
     } catch (error: any) {
         console.error("Error sending list:", error?.response?.data || error.message);
     }
@@ -121,7 +148,7 @@ export async function sendMedia(to: string, url: string, type: 'image' | 'video'
                 },
             }
         );
-        console.log(`${type} sent to ${to} via Evolution API`);
+        console.log(`${type} sent to ${to}`);
     } catch (error: any) {
         console.error(`Error sending ${type}:`, error?.response?.data || error.message);
     }

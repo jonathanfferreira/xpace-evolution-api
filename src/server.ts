@@ -1,9 +1,11 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
-import { getHistory, saveMessage, clearHistory } from './services/memory';
+import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState } from './services/memory';
 import { generateResponse } from './services/ai';
-import { sendMessage, sendButtons, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
+import { sendMessage, sendProfessionalMessage, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
+import { addLabelToConversation } from './services/chatwoot';
+
 
 dotenv.config();
 
@@ -50,9 +52,6 @@ app.get('/health', (req: Request, res: Response) => {
 // Queue para processar mensagens sequencialmente por usuário
 const messageQueues = new Map<string, Promise<void>>();
 
-// Estado do Fluxo de Diagnóstico por usuário
-const userFlow = new Map<string, { step: string, experience?: string }>();
-
 // Webhook Reception (Evolution API)
 app.post('/webhook', async (req: Request, res: Response) => {
     const body = req.body;
@@ -77,32 +76,30 @@ app.post('/webhook', async (req: Request, res: Response) => {
             const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
             const messageKey = data.key;
 
-            // 1. EXTRAÇÃO DA MENSAGEM (Texto ou Botão/Lista)
+            // 1. EXTRAÇÃO DA MENSAGEM
             let msgBody = data.message?.conversation ||
                 data.message?.extendedTextMessage?.text ||
                 data.message?.buttonsResponseMessage?.selectedDisplayText ||
                 data.message?.listResponseMessage?.title;
 
-            // IDs de Botão e Lista (Evolution API)
-            const buttonId = data.message?.buttonsResponseMessage?.selectedButtonId ||
-                data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
+            // Converter para string normal, caso seja "RowId" da lista
+            let selectedRowId = data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
 
-            if (msgBody || buttonId) {
-                console.log(`[${from}] Msg: "${msgBody}" | ButtonID: ${buttonId}`);
-                await sendPresence(from, 'composing');
+            if (msgBody || selectedRowId) {
+                console.log(`[${from}] Msg: "${msgBody}" | RowID: ${selectedRowId}`);
 
                 // ----------------------------------------------------
                 // 🛑 COMANDOS DE DEBUG/RESET (Prioridade Total)
                 // ----------------------------------------------------
                 if (msgBody?.toLowerCase().trim() === '/reset') {
                     await clearHistory(from);
-                    userFlow.delete(from);
-                    await sendMessage(from, "♻️ Tudo limpo! Memória e Fluxo reiniciados.");
+                    await deleteFlowState(from);
+                    await sendProfessionalMessage(from, "♻️ Tudo limpo! Memória e Fluxo reiniciados.");
                     return;
                 }
                 if (msgBody?.toLowerCase().trim() === '/debug') {
-                    const state = userFlow.get(from);
-                    await sendMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`);
+                    const state = await getFlowState(from);
+                    await sendProfessionalMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`);
                     return;
                 }
 
@@ -110,114 +107,321 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, 0)
                 // ----------------------------------------------------
                 if (isGreeting(msgBody) || msgBody?.trim() === '0') {
-                    userFlow.delete(from);
+                    await deleteFlowState(from); // Reinicia fluxo
+
                     await sendReaction(from, messageKey, '👋');
-                    await sendMessage(from,
-                        `Olá, ${pushName}! 👋\n\n` +
-                        `Sou o *X-Bot* da XPACE. Como posso te ajudar?\n\n` +
-                        `*1️⃣* Quero Dançar\n` +
-                        `*2️⃣* Ver Preços\n` +
-                        `*3️⃣* Localização\n` +
-                        `*4️⃣* Falar com Humano\n\n` +
-                        `_Digite o número da opção desejada._`
+
+                    await sendList(
+                        from,
+                        "Bem-vindo à XPACE! 🚀",
+                        `Olá, ${pushName}! Sou o X-Bot.\nEscolha uma opção para começarmos:`,
+                        "ABRIR MENU",
+                        [
+                            {
+                                title: "Navegação",
+                                rows: [
+                                    { id: "menu_menu", title: "📝 Menu Principal", description: "Voltar ao início" },
+                                    { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                    { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores" },
+                                    { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
+                                    { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
+                                ]
+                            }
+                        ]
                     );
-                    userFlow.set(from, { step: 'MENU_MAIN' });
+
+                    await saveFlowState(from, 'MENU_MAIN');
                     return;
                 }
 
                 // ----------------------------------------------------
-                // 🔵 2. TRATAMENTO DOS NÚMEROS DO MENU
+                // 🔵 2. TRATAMENTO DE ESTADO E ESCOLHAS
                 // ----------------------------------------------------
-                const currentState = userFlow.get(from);
-                const trimmedMsg = msgBody?.trim();
+                const currentState = await getFlowState(from);
+                const input = selectedRowId || msgBody?.trim(); // Prioriza ID do botão
 
                 // Menu Principal -> Escolha
                 if (currentState?.step === 'MENU_MAIN') {
-                    if (trimmedMsg === '1') {
-                        // Fluxo Dançar
-                        await sendMessage(from,
-                            `Que demais! 🤩 Para indicar a turma certa:\n\n` +
-                            `*1️⃣* Nunca dancei (Iniciante)\n` +
-                            `*2️⃣* Já danço / Tenho noção\n\n` +
-                            `_Digite 1 ou 2_`
-                        );
-                        userFlow.set(from, { step: 'ASK_EXPERIENCE' });
+                    if (input === 'menu_1' || input === '1') {
+                        // Iniciar Cadastro: Pergunta Nome
+                        await sendProfessionalMessage(from, "Que incrível que você quer dançar com a gente! 🤩\n\nPara eu te indicar a turma perfeita, preciso te conhecer um pouquinho melhor.\n\nPrimeiro, *como você gostaria de ser chamado?*");
+                        await saveFlowState(from, 'ASK_NAME');
+                        // Tag inicial
+                        addLabelToConversation(from, 'prospect').catch(err => console.error(err));
                         return;
                     }
-                    if (trimmedMsg === '2') {
-                        // Preços
-                        await sendMessage(from,
+                    if (input === 'menu_2' || input === '2') {
+                        await sendProfessionalMessage(from,
                             `💰 *Investimento XPACE (2026)*\n\n` +
-                            `💎 *Anual:* R$ 165/mês (Melhor!)\n` +
-                            `💳 *Mensal:* R$ 215/mês\n` +
-                            `🎟️ *Avulso:* R$ 50\n\n` +
-                            `📝 Matricule-se: https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
-                            `_Digite 0 para voltar ao menu._`
+                            `Aqui você tem flexibilidade total:\n\n` +
+                            `💎 *Plano Anual:* R$ 165/mês (O favorito!)\n` +
+                            `💳 *Plano Semestral:* R$ 195/mês\n` +
+                            `🎟️ *Plano Mensal:* R$ 215/mês\n\n` +
+                            `_Quer garantir sua vaga agora?_\n` +
+                            `🔗 https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
+                            `_Digite 0 para voltar._`
                         );
                         return;
                     }
-                    if (trimmedMsg === '3') {
-                        // Localização
-                        await sendLocation(from, -26.301385, -48.847589, "XPACE Escola de Dança", "Rua Tijucas, 401 - Centro, Joinville");
-                        await sendMessage(from, "Estacionamento gratuito! 🚗\n\n_Digite 0 para voltar ao menu._");
+                    if (input === 'menu_3' || input === '3') {
+                        await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
+                        await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito para alunos.\n✅ Lanchonete e espaço de convivência.\n\n_Digite 0 para voltar._");
                         return;
                     }
-                    if (trimmedMsg === '4') {
-                        // Humano
-                        await sendMessage(from, "Chamei a equipe! Alguém já vem falar com você. 🙋‍♂️");
+                    if (input === 'menu_4' || input === '4') {
+                        await sendProfessionalMessage(from, "Entendi, às vezes é bom falar com gente de verdade! 😄\n\nJá notifiquei a equipe (Alceu/Ruan/Jhonney). Em alguns instantes alguém te chama por aqui. ⏳");
                         await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
+                        addLabelToConversation(from, 'human_handoff').catch(console.error);
                         return;
                     }
                 }
 
-                // Fluxo Dançar - Experiência
+                // Fluxo Dançar: Nome -> Idade
+                if (currentState?.step === 'ASK_NAME') {
+                    const name = msgBody;
+                    if (name && name.length > 2) {
+                        await sendProfessionalMessage(from, `Prazer, ${name}! 👋\n\nE qual a sua *idade*? (Isso ajuda a saber se te indico turmas teens, adulto ou kids)`);
+                        await saveFlowState(from, 'ASK_AGE', { name });
+                        return;
+                    }
+                }
+
+                // Fluxo Dançar: Idade -> Experiência
+                if (currentState?.step === 'ASK_AGE') {
+                    const age = msgBody?.replace(/[^0-9]/g, '');
+                    if (age && age.length > 0) {
+                        const prevData = currentState.data || {};
+                        await sendList(
+                            from,
+                            "Sua Experiência",
+                            `Show! Agora sobre a dança... qual seu nível atual?`,
+                            "SELECIONAR NÍVEL",
+                            [
+                                {
+                                    title: "Nível",
+                                    rows: [
+                                        { id: "exp_iniciante", title: "🐣 Nunca dancei", description: "Quero começar do zero" },
+                                        { id: "exp_basico", title: "🦶 Tenho uma noção", description: "Já fiz algumas aulas" },
+                                        { id: "exp_avancado", title: "🔥 Já danço bem", description: "Nível interm/avançado" }
+                                    ]
+                                }
+                            ]
+                        );
+                        await saveFlowState(from, 'ASK_EXPERIENCE', { ...prevData, age });
+                        return;
+                    }
+                }
+
+                // Fluxo Dançar: Experiência -> Objetivo
                 if (currentState?.step === 'ASK_EXPERIENCE') {
-                    if (trimmedMsg === '1' || trimmedMsg === '2') {
-                        const exp = trimmedMsg === '1' ? 'iniciante' : 'avancado';
-                        await sendMessage(from,
-                            `E o que você busca na dança?\n\n` +
-                            `*1️⃣* Hobby / Diversão\n` +
-                            `*2️⃣* Exercício / Suar\n` +
-                            `*3️⃣* Profissionalização\n\n` +
-                            `_Digite 1, 2 ou 3_`
+                    if (input?.startsWith('exp_') || ['1', '2', '3'].includes(input || '')) {
+                        const exp = input.replace('exp_', '');
+                        const prevData = currentState.data || {};
+                        await sendList(
+                            from,
+                            "Seu Objetivo",
+                            "Legal! E o que você busca na XPACE hoje?",
+                            "SELECIONAR META",
+                            [
+                                {
+                                    title: "Objetivo",
+                                    rows: [
+                                        { id: "goal_hobby", title: "🎉 Hobby / Diversão", description: "Relaxar, fazer amigos" },
+                                        { id: "goal_fitness", title: "💦 Suar a camisa", description: "Exercício físico intenso" },
+                                        { id: "goal_pro", title: "🏆 Profissionalizar", description: "Evoluir técnica/carreira" }
+                                    ]
+                                }
+                            ]
                         );
-                        userFlow.set(from, { step: 'ASK_GOAL', experience: exp });
+                        await saveFlowState(from, 'ASK_GOAL', { ...prevData, experience: exp });
+                        // Tag experience
+                        addLabelToConversation(from, exp).catch(console.error);
                         return;
                     }
                 }
 
-                // Fluxo Dançar - Objetivo -> Recomendação
+                // Fluxo Dançar: Objetivo -> Recomendação + Drill Down
                 if (currentState?.step === 'ASK_GOAL') {
-                    if (['1', '2', '3'].includes(trimmedMsg || '')) {
-                        const exp = currentState.experience;
-                        let rec = exp === 'iniciante'
-                            ? "Para começar do zero: *Street Dance Iniciante*, *K-Pop* ou *Dança de Salão*."
-                            : "Para evoluir: *FitDance*, *Hip Hop Open Level* ou *Jazz*!";
+                    if (input?.startsWith('goal_') || ['1', '2', '3'].includes(input || '')) {
+                        const goal = input.replace('goal_', '');
+                        const prevData = currentState.data || {};
+                        const { name, age, experience } = prevData;
 
-                        await sendMessage(from,
-                            `Perfeito! ${rec}\n\n` +
-                            `📅 *Agende sua aula experimental grátis:*\n` +
-                            `https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n` +
-                            `_Digite 0 para voltar ao menu._`
+                        const userProfile = `[Perfil Aluno: Nome=${name}, Idade=${age}, Nível=${experience}, Objetivo=${goal}]`;
+                        await saveMessage(from, 'user', userProfile);
+
+                        let recs = [];
+                        if (experience === 'iniciante') {
+                            recs = ['Start Dance (Iniciante)', 'K-Pop', 'Dança de Salão'];
+                        } else {
+                            recs = ['Urban Dance', 'Jazz Funk', 'Heels'];
+                        }
+
+                        await sendList(
+                            from,
+                            "Suas Recomendações 📋",
+                            `Perfil analisado com sucesso, ${name}! 🕵️‍♂️\n\nCom base no que me contou, estas turmas são perfeitas para você:\n\n` +
+                            recs.map(r => `• *${r}*`).join('\n') +
+                            `\n\n👇 *Selecione uma modalidade abaixo para ver detalhes (vídeo/horário):*`,
+                            "VER DETALHES",
+                            [
+                                {
+                                    title: "Modalidades",
+                                    rows: [
+                                        { id: "mod_street", title: "👟 Street / Urban", description: "Estilo urbano e intenso" },
+                                        { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnica e expressão" },
+                                        { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias dos idols" },
+                                        { id: "mod_ritmos", title: "💃 Ritmos & Ballet", description: "Mix, Ballet e mais" },
+                                        { id: "mod_teatro", title: "🎭 Teatro", description: "Interpretação e arte" },
+                                        { id: "mod_outros", title: "✨ Especiais", description: "Acrobacia e Populares" },
+                                        { id: "final_booking", title: "✅ Já quero agendar!", description: "Ir para matrícula" }
+                                    ]
+                                }
+                            ]
                         );
-                        userFlow.delete(from);
+                        await saveFlowState(from, 'SELECT_MODALITY', { ...prevData, goal });
+                        // Tag Goal e Lead Quente
+                        addLabelToConversation(from, goal).catch(console.error);
+                        addLabelToConversation(from, 'hot_lead').catch(console.error);
                         return;
                     }
+                }
+
+                // Fluxo Detalhes da Modalidade
+                if (currentState?.step === 'SELECT_MODALITY') {
+                    if (input === 'final_booking') {
+                        await sendProfessionalMessage(from,
+                            "Ótima escolha! Vamos agendar sua aula experimental. 📅\n\n" +
+                            "Acesse nossa agenda oficial aqui:\n" +
+                            "👉 https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n" +
+                            "Te esperamos na XSpace! Qualquer dúvida, é só chamar. 😉"
+                        );
+                        await deleteFlowState(from);
+                        addLabelToConversation(from, 'conversion_booked').catch(console.error);
+                        return;
+                    }
+
+                    if (input?.startsWith('mod_')) {
+                        const mod = input.replace('mod_', '');
+                        addLabelToConversation(from, mod).catch(console.error);
+                        let details = "";
+
+                        switch (mod) {
+                            case 'street':
+                                details = "👟 *DANÇAS URBANAS (Street)*\n\n*MANHÃ*\n▫️ Seg/Qua 08:00 — Kids\n▫️ Seg/Qua 08:30 — Kids\n▫️ Ter/Qui 09:00 — Teens\n▫️ Sáb 10:00 — Geral\n\n*TARDE*\n▫️ Seg/Qua 14:30 — Kids\n▫️ Ter/Qui 14:30 — Iniciante\n\n*NOITE*\n▫️ Seg/Qua 19:00 — Junior / Kids\n▫️ Seg/Qua 20:00 — Senior\n▫️ Ter/Qui 21:00 — Iniciante\n▫️ Sex 19:00 — Iniciante\n▫️ Sex 20:00 — Street Funk";
+                                break;
+                            case 'jazz':
+                                details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\n*SEGUNDA & QUARTA*\n▫️ 19:00 — Contemporâneo (XLAB)\n▫️ 20:00 — Jazz Iniciante (XCORE)\n▫️ 21:00 — Jazz (XPERIENCE)\n\n*TERÇA*\n▫️ 19:00 — Jazz Funk (XLAB)\n\n*SÁBADO*\n▫️ 09:00 — Jazz Funk (XPERIENCE)";
+                                break;
+                            case 'kpop':
+                                details = "🇰🇷 *K-POP*\n\nAprenda as coreografias oficiais dos seus grupos favoritos!\n\n🕒 *Horários:* Sábados às 14h.\n🎥 *Vibe:* Divertido e comunidade.";
+                                break;
+                            case 'ritmos':
+                                details = "💃 *RITMOS & BALLET*\n\n*RITMOS (Mix de Danças)*\n▫️ Seg/Qua às 09:00 (XTAGE)\n▫️ Seg/Qua às 19:00 (XTAGE)\n▫️ Ter/Qui às 19:00 (XCORE)\n\n*BALLET CLÁSSICO (Iniciante)*\n▫️ Ter/Qui às 20:00 (XCORE)";
+                                break;
+                            case 'teatro':
+                                details = "🎭 *AULAS DE TEATRO*\n\nDesenvolva sua comunicação e expressão!\n\n*SEGUNDA*\n▫️ 09:00 — Manhã (XPERIENCE)\n▫️ 15:30 — Tarde (XLAB)\n\n*QUARTA*\n▫️ 09:30 — Manhã (XCORE)\n▫️ 15:30 — Tarde (XLAB)";
+                                break;
+                            case 'outros':
+                                details = "✨ *AULAS ESPECIAIS*\n\n*DANÇAS POPULARES*\n▫️ Seg/Qua às 14:00 (XPERIENCE)\n\n*ACROBACIA*\n▫️ Seg/Qua às 20:00 (XTAGE)";
+                                break;
+                        }
+
+                        await sendProfessionalMessage(from, details);
+                        setTimeout(async () => {
+                            await sendList(
+                                from,
+                                "Mais Opções",
+                                "O que mais gostaria de ver?",
+                                "ESCOLHER",
+                                [
+                                    {
+                                        title: "Ações",
+                                        rows: [
+                                            { id: "final_booking", title: "📅 Agendar Aula", description: "Gostei, quero ir!" },
+                                            { id: "menu_menu", title: "🔙 Voltar ao Menu", description: "Ver outras opções" }
+                                        ]
+                                    }
+                                ]
+                            );
+                        }, 2000);
+                        return;
+                    }
+                }
+
+                // Voltar ao Menu
+                if (input === 'menu_menu') {
+                    await deleteFlowState(from);
+                    await sendList(
+                        from,
+                        "Menu Principal",
+                        "De volta ao início! Como posso ajudar?",
+                        "ABRIR MENU",
+                        [
+                            {
+                                title: "Navegação",
+                                rows: [
+                                    { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                    { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores 2026" },
+                                    { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
+                                    { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
+                                ]
+                            }
+                        ]
+                    );
+                    await saveFlowState(from, 'MENU_MAIN');
+                    return;
                 }
 
                 // ----------------------------------------------------
                 // 🟣 IA HÍBRIDA (Fallback para dúvidas complexas)
                 // ----------------------------------------------------
-                // Se não é número nem comando, usa a IA
-                if (msgBody && msgBody.length > 2 && !['0', '1', '2', '3', '4'].includes(trimmedMsg || '')) {
+                if (msgBody && msgBody.length > 2 && !input?.startsWith('menu_') && !input?.startsWith('exp_') && !input?.startsWith('goal_') && !input?.startsWith('mod_')) {
                     console.log(`🤖 IA Fallback para: ${msgBody}`);
+
+                    await sendPresence(from, 'composing');
+
+                    // --- AUTOMAÇÃO CHATWOOT INTELIGENTE ---
+                    const lowerMsg = msgBody.toLowerCase();
+
+                    // 1. Financeiro (Pix, Boleto, Valor, Pagamento)
+                    if (lowerMsg.includes('pix') || lowerMsg.includes('boleto') || lowerMsg.includes('transfer') || lowerMsg.includes('pagamento')) {
+                        addLabelToConversation(from, 'financeiro').catch(console.error);
+                    }
+
+                    // 2. Urgente (Reclamação, Problema, Erro)
+                    if (lowerMsg.includes('reclam') || lowerMsg.includes('problema') || lowerMsg.includes('erro') || lowerMsg.includes('odiei')) {
+                        addLabelToConversation(from, 'urgente').catch(console.error);
+                        await notifySocios(`🚨 RECLAMAÇÃO/URGENTE`, { jid: from, name: pushName });
+                    }
+
+                    // 3. Churn / Cancelamento (Risco de Perda)
+                    if (lowerMsg.includes('cancelar') || lowerMsg.includes('sair') || lowerMsg.includes('parar') || lowerMsg.includes('reembolso')) {
+                        addLabelToConversation(from, 'churn_risk').catch(console.error);
+                        // Opcional: Notificar sócios também?
+                        await notifySocios(`⚠️ RISCO DE CHURN/CANCELAMENTO`, { jid: from, name: pushName });
+                    }
+
+                    // 4. Elogios (Love)
+                    if (lowerMsg.includes('amei') || lowerMsg.includes('adoro') || lowerMsg.includes('incrivel') || lowerMsg.includes('maravilh')) {
+                        addLabelToConversation(from, 'love').catch(console.error);
+                    }
+
+                    // 5. Dúvidas de Localização
+                    if (isLocationRequest(lowerMsg)) {
+                        addLabelToConversation(from, 'duvida_local').catch(console.error);
+                    }
+                    // --------------------------------------
+
                     const history = await getHistory(from);
                     const aiResponse = await generateResponse(msgBody, history);
+
                     if (!aiResponse.startsWith("Erro:")) {
                         await saveMessage(from, 'user', msgBody);
                         await saveMessage(from, 'model', aiResponse);
                     }
-                    await sendMessage(from, aiResponse);
+
+                    await sendProfessionalMessage(from, aiResponse);
                 }
             }
 
@@ -226,20 +430,19 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 await sendReaction(from, messageKey, '🎧');
                 await sendPresence(from, 'recording');
                 setTimeout(async () => {
-                    await sendMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! 🏃‍♂️`);
-                }, 1000);
+                    await sendProfessionalMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! 🏃‍♂️\n(Em breve vou conseguir transcrever o que você disse!)`);
+                }, 2000);
             }
         } catch (error) {
             console.error('Erro no webhook:', error);
         }
     };
 
-    // Gerenciamento de Concorrência: Enfileira a promessa
+    // Gerenciamento de Concorrência
     const previousPromise = messageQueues.get(from) || Promise.resolve();
     const currentPromise = previousPromise.then(processMessage);
     messageQueues.set(from, currentPromise);
 
-    // Limpa a fila quando terminar para liberar memória
     currentPromise.catch(() => { }).finally(() => {
         if (messageQueues.get(from) === currentPromise) {
             messageQueues.delete(from);
