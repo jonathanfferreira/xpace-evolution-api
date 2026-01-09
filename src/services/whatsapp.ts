@@ -48,82 +48,47 @@ export async function sendMessage(to: string, text: string) {
 }
 
 export async function sendButtons(to: string, text: string, buttons: { id: string, label: string }[]) {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    // FALLBACK: Enviar botões como TEXTO com números
+    // Motivo: Evolution API v2 / WhatsApp frequentemente falha com botões interativos (Error 400)
 
     if (!text || !buttons || buttons.length === 0) return;
 
-    // Converter para o formato correto da Evolution API v2
-    const formattedButtons = buttons.map(btn => ({
-        type: "reply",
-        buttonId: btn.id,
-        buttonText: { displayText: btn.label }
-    }));
+    let messageBody = text + "\n\n";
+    buttons.forEach((btn, index) => {
+        messageBody += `${index + 1}. ${btn.label}\n`;
+    });
 
-    try {
-        await axios.post(
-            `${serverUrl}/message/sendButtons/${instanceName}`,
-            {
-                number: to,
-                title: "XPACE",
-                description: text,
-                buttons: formattedButtons,
-                delay: 1200
-            },
-            {
-                headers: {
-                    apikey: apiKey,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
-        console.log(`Buttons sent to ${to}`);
-    } catch (error: any) {
-        console.error("Error sending buttons:", error?.response?.data || error.message);
-    }
+    console.log(`[FALLBACK] Sending buttons as text to ${to}`);
+    await sendMessage(to, messageBody);
 }
 
 export async function sendList(to: string, title: string, text: string, buttonText: string, sections: { title: string, rows: { id: string, title: string, description?: string }[] }[]) {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    // FALLBACK: Enviar lista como TEXTO com números
+    // Motivo: Evolution API v2 / WhatsApp frequentemente falha com listas interativas (Error 400)
 
     if (!text || !sections || sections.length === 0) return;
 
-    try {
-        // Humanização: Enviar "Digitando..."
-        await sendPresence(to, 'composing');
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Delay fixo para listas
+    // Humanização: Enviar "Digitando..."
+    await sendPresence(to, 'composing');
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-        await axios.post(
-            `${serverUrl}/message/sendList/${instanceName}`,
-            {
-                number: to,
-                title: title,
-                text: text,
-                buttonText: buttonText,
-                sections: sections.map(section => ({
-                    title: section.title,
-                    rows: section.rows.map(row => ({
-                        title: row.title,
-                        description: row.description,
-                        rowId: row.id
-                    }))
-                })),
-                delay: 0
-            },
-            {
-                headers: {
-                    apikey: apiKey,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
-        console.log(`List sent to ${to}`);
-    } catch (error: any) {
-        console.error("Error sending list:", error?.response?.data || error.message);
-    }
+    let messageBody = `*${title}*\n${text}\n\n`;
+
+    let optionIndex = 1;
+    sections.forEach(section => {
+        if (section.title) messageBody += `*${section.title}*\n`;
+
+        section.rows.forEach(row => {
+            messageBody += `${optionIndex}. ${row.title}`;
+            if (row.description) messageBody += ` - ${row.description}`;
+            messageBody += "\n";
+            optionIndex++;
+        });
+        messageBody += "\n";
+    });
+
+    console.log(`[FALLBACK] Sending list as text to ${to}`);
+    await sendMessage(to, messageBody);
 }
 
 export async function sendMedia(to: string, url: string, type: 'image' | 'video' | 'document' | 'audio', caption: string = "") {
