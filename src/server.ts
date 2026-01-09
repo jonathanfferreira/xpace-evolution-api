@@ -396,6 +396,10 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         }
 
                         await sendProfessionalMessage(from, details);
+
+                        // Atualiza estado para evitar colisão de inputs (1=Street vs 1=Agendar)
+                        await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { ...currentState.data, viewing: mod });
+
                         setTimeout(async () => {
                             await sendList(
                                 from,
@@ -413,6 +417,45 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                 ]
                             );
                         }, 2000);
+                        return;
+                    }
+                }
+
+                // Fluxo: Vendo Detalhes -> Ação (Agendar ou Voltar)
+                if (currentState?.step === 'VIEW_MODALITY_DETAILS') {
+                    if (input === '1' || input === 'final_booking' || input.includes('agendar')) {
+                        await sendProfessionalMessage(from,
+                            "Ótima escolha! Vamos agendar sua aula experimental. 📅\n\n" +
+                            "Acesse nossa agenda oficial aqui:\n" +
+                            "👉 https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n" +
+                            "Te esperamos na XSpace! Qualquer dúvida, é só chamar. 😉"
+                        );
+                        await deleteFlowState(from);
+                        addLabelToConversation(from, 'conversion_booked').catch(console.error);
+                        return;
+                    }
+
+                    if (input === '2' || input === 'menu_menu' || input.includes('voltar')) {
+                        // Deixa cair no bloco abaixo que já trata 'menu_menu' ou chama explicitamente
+                        await deleteFlowState(from);
+                        await sendList(
+                            from,
+                            "Menu Principal",
+                            "De volta ao início! Como posso ajudar?",
+                            "ABRIR MENU",
+                            [
+                                {
+                                    title: "Navegação",
+                                    rows: [
+                                        { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                        { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores" },
+                                        { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
+                                        { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
+                                    ]
+                                }
+                            ]
+                        );
+                        await saveFlowState(from, 'MENU_MAIN');
                         return;
                     }
                 }
