@@ -183,12 +183,18 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     // OPÇÃO 2: VER PREÇOS
                     if (input === 'menu_prices' || input === '2' || input.includes('preço') || input.includes('valor')) {
                         await sendProfessionalMessage(from,
-                            `💰 *Investimento XPACE (2026)*\n\n` +
-                            `Aqui você tem flexibilidade total:\n\n` +
-                            `💎 *Plano Anual:* R$ 165/mês (O favorito!)\n` +
-                            `💳 *Plano Semestral:* R$ 195/mês\n` +
-                            `🎟️ *Plano Mensal:* R$ 215/mês\n\n` +
-                            `_Quer garantir sua vaga agora?_\n` +
+                            `💰 *Investimento XPACE (2026)* 🚀\n\n` +
+                            `Escolha o plano que melhor se adapta à sua rotina:\n\n` +
+                            `� *PASSE LIVRE (Acesso Total):* R$ 350/mês\n_Faça quantas aulas quiser de qualquer modalidade!_\n\n` +
+                            `*PLANOS REGULARES (2x na semana)*\n` +
+                            `💎 *Anual:* R$ 165/mês (Melhor Valor)\n` +
+                            `💳 *Semestral:* R$ 195/mês\n` +
+                            `🎟️ *Mensal:* R$ 215/mês\n\n` +
+                            `*TURMAS 1x NA SEMANA*\n` +
+                            `💎 *Anual:* R$ 100/mês\n` +
+                            `💳 *Semestral:* R$ 115/mês\n` +
+                            `🎟️ *Mensal:* R$ 130/mês\n\n` +
+                            `_Quer garantir sua vaga?_\n` +
                             `🔗 https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
                             `_Digite 0 para voltar._`
                         );
@@ -324,7 +330,25 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                 // Fluxo Detalhes da Modalidade
                 if (currentState?.step === 'SELECT_MODALITY') {
-                    if (input === 'final_booking') {
+                    // Mapeamento numérico para modalidades
+                    const modalityMap: { [key: string]: string } = {
+                        '1': 'street',
+                        '2': 'jazz',
+                        '3': 'kpop',
+                        '4': 'ritmos',
+                        '5': 'teatro',
+                        '6': 'outros',
+                        '7': 'final_booking'
+                    };
+
+                    let mod = input || '';
+                    if (modalityMap[mod]) {
+                        mod = modalityMap[mod];
+                    } else if (mod.startsWith('mod_')) {
+                        mod = mod.replace('mod_', '');
+                    }
+
+                    if (mod === 'final_booking') {
                         await sendProfessionalMessage(from,
                             "Ótima escolha! Vamos agendar sua aula experimental. 📅\n\n" +
                             "Acesse nossa agenda oficial aqui:\n" +
@@ -336,29 +360,38 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         return;
                     }
 
-                    if (input?.startsWith('mod_')) {
-                        const mod = input.replace('mod_', '');
+                    if (['street', 'jazz', 'kpop', 'ritmos', 'teatro', 'outros', 'heels', 'ballet', 'lutas', 'salao'].includes(mod)) {
                         addLabelToConversation(from, mod).catch(console.error);
                         let details = "";
 
                         switch (mod) {
                             case 'street':
-                                details = "👟 *DANÇAS URBANAS (Street)*\n\n*MANHÃ*\n▫️ Seg/Qua 08:00 — Kids\n▫️ Seg/Qua 08:30 — Kids\n▫️ Ter/Qui 09:00 — Teens\n▫️ Sáb 10:00 — Geral\n\n*TARDE*\n▫️ Seg/Qua 14:30 — Kids\n▫️ Ter/Qui 14:30 — Iniciante\n\n*NOITE*\n▫️ Seg/Qua 19:00 — Junior / Kids\n▫️ Seg/Qua 20:00 — Senior\n▫️ Ter/Qui 21:00 — Iniciante\n▫️ Sex 19:00 — Iniciante\n▫️ Sex 20:00 — Street Funk";
+                                details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
                                 break;
                             case 'jazz':
-                                details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\n*SEGUNDA & QUARTA*\n▫️ 19:00 — Contemporâneo (XLAB)\n▫️ 20:00 — Jazz Iniciante (XCORE)\n▫️ 21:00 — Jazz (XPERIENCE)\n\n*TERÇA*\n▫️ 19:00 — Jazz Funk (XLAB)\n\n*SÁBADO*\n▫️ 09:00 — Jazz Funk (XPERIENCE)";
+                                details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
                                 break;
                             case 'kpop':
-                                details = "🇰🇷 *K-POP*\n\nAprenda as coreografias oficiais dos seus grupos favoritos!\n\n🕒 *Horários:* Sábados às 14h.\n🎥 *Vibe:* Divertido e comunidade.";
+                            case 'salao': // Juntando K-Pop em estilos se necessário, ou mantendo separado
+                                details = "💃 *DANÇA DE SALÃO & ESTILOS*\n\n*K-POP (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)\n\n*DANÇA DE SALÃO (18+)*\n▫️ Ter/Qui 20:00 (XLAB)\n\n*DANCEHALL (15+)*\n▫️ Sáb 14:30 (XLAB)\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)";
+                                break;
+                            case 'heels':
+                                details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
                                 break;
                             case 'ritmos':
-                                details = "💃 *RITMOS & BALLET*\n\n*RITMOS (Mix de Danças)*\n▫️ Seg/Qua às 09:00 (XTAGE)\n▫️ Seg/Qua às 19:00 (XTAGE)\n▫️ Ter/Qui às 19:00 (XCORE)\n\n*BALLET CLÁSSICO (Iniciante)*\n▫️ Ter/Qui às 20:00 (XCORE)";
+                                details = "💃 *RITMOS*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)";
+                                break;
+                            case 'ballet':
+                                details = "🩰 *BALLET CLÁSSICO*\n\n*BABY CLASS (3+)*\n▫️ Ter/Qui 15:30 (XLAB)\n\n*BALLET INICIANTE (12+)*\n▫️ Ter/Qui 20:00 (XCORE)";
                                 break;
                             case 'teatro':
-                                details = "🎭 *AULAS DE TEATRO*\n\nDesenvolva sua comunicação e expressão!\n\n*SEGUNDA*\n▫️ 09:00 — Manhã (XPERIENCE)\n▫️ 15:30 — Tarde (XLAB)\n\n*QUARTA*\n▫️ 09:30 — Manhã (XCORE)\n▫️ 15:30 — Tarde (XLAB)";
+                                details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
+                                break;
+                            case 'lutas':
+                                details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
                                 break;
                             case 'outros':
-                                details = "✨ *AULAS ESPECIAIS*\n\n*DANÇAS POPULARES*\n▫️ Seg/Qua às 14:00 (XPERIENCE)\n\n*ACROBACIA*\n▫️ Seg/Qua às 20:00 (XTAGE)";
+                                details = "✨ *AULAS ESPECIAIS*\n\n*HEELS (Salto)*\n▫️ Ver categoria Heels\n\n*LUTAS*\n▫️ Muay Thai e Jiu Jitsu\n\n*BALLET*\n▫️ Infantil e Adulto\n\n_Escolha voltar ao menu para ver mais opções!_";
                                 break;
                         }
 
