@@ -34,8 +34,17 @@ function isLocationRequest(text: string): boolean {
 
 // Funções de Notificação para Sócios
 async function notifySocios(intent: string, userInfo: any) {
-    const text = `🚨 *ALERTA XPACE-BOT*\n\nUm aluno demonstrou forte interesse em: *${intent}*\nDe: ${userInfo.name || userInfo.jid}\n\nFavor entrar em contato!`;
+    let text = "";
+    if (intent.startsWith("👁️")) {
+        text = `🚨 *ALERTA DE LEITURA (XPACE)*\n\n${intent}\nAluno: ${userInfo.name || userInfo.jid}`;
+    } else {
+        text = `🚨 *ALERTA XPACE-BOT*\n\nUm aluno demonstrou forte interesse em: *${intent}*\nDe: ${userInfo.name || userInfo.jid}\n\nFavor entrar em contato!`;
+    }
+
+    // Notifica todos (ou apenas Alceu/Ruan/Jhonney como configurado)
     await sendMessage(SOCIOS.ALCEU, text);
+    // await sendMessage(SOCIOS.RUAN, text); 
+    // await sendMessage(SOCIOS.JHONNEY, text);
 }
 
 // Log every request to console
@@ -68,6 +77,42 @@ setInterval(() => {
 app.post('/webhook', async (req: Request, res: Response) => {
     const body = req.body;
     const event = body.event?.toLowerCase();
+
+    // ----------------------------------------------------
+    // 👁️ DETECÇÃO DE LEITURA (messages.update)
+    // ----------------------------------------------------
+    if (event === 'messages.update' || event === 'messages_update') {
+        const data = body.data;
+        if (data && data.status === 'READ') {
+            const from = data.key.remoteJid;
+
+            // Só nos importamos se não for mensagem de grupo (status broadcast)
+            if (from.includes('@g.us')) return;
+
+            // Verifica o estado atual do usuário
+            const currentState = await getFlowState(from);
+
+            // Se o usuário estiver nessas etapas CRÍTICAS, notificamos!
+            if (currentState) {
+                const step = currentState.step;
+                const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
+
+                if (step === 'VIEW_MODALITY_DETAILS' || step === 'SELECT_MODALITY') {
+                    console.log(`[READ RECEIPT] ${from} visualizou Detalhes/Agendamento!`);
+                    await notifySocios(`👁️ Lead [${pushName}] visualizou o Link de Agendamento/Detalhes!`, { jid: from, name: pushName });
+                }
+
+                if (step === 'MENU_MAIN') {
+                    // Opcional: Notificar se viu preços? Fica a critério.
+                    // Apenas logar por enquanto
+                    console.log(`[READ RECEIPT] ${from} visualizou o Menu Principal.`);
+                }
+            }
+        }
+        res.sendStatus(200);
+        return;
+    }
+
 
     if (event !== 'messages.upsert' && event !== 'messages_upsert') {
         res.sendStatus(200);
