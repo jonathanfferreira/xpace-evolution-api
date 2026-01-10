@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState } from './services/memory';
-import { generateResponse } from './services/ai';
+import { generateResponse, XPACE_CONTEXT } from './services/ai';
 import { sendMessage, sendProfessionalMessage, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
 import { addLabelToConversation } from './services/chatwoot';
 
@@ -56,6 +56,64 @@ app.use((req, res, next) => {
 // Verifica se o servidor está rodando
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).send('XPACE WhatsApp Bot is running!');
+});
+
+// Enable CORS for Website Integration
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    next();
+});
+
+// ----------------------------------------------------
+// 🚀 INTEGRAÇÃO COM SITE (Novo Endpoint)
+// ----------------------------------------------------
+app.post('/api/lead', async (req: Request, res: Response) => {
+    try {
+        const { name, phone, intent, unit } = req.body;
+
+        console.log(`[SITE LEAD] Novo lead recebido: ${name} (${phone}) - ${intent}`);
+
+        // 1. Formata o telefone para o padrão do WhatsApp (55 + DDD + 9 + Numero)
+        // Remove tudo que não for número
+        let cleanPhone = phone.toString().replace(/\D/g, '');
+
+        // Se começar com 0, remove
+        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+
+        // Adiciona 55 se não tiver
+        if (!cleanPhone.startsWith('55')) cleanPhone = '55' + cleanPhone;
+
+        // Adiciona @s.whatsapp.net
+        const jid = cleanPhone + '@s.whatsapp.net';
+
+        // 2. Envia mensagem de boas-vindas para o Lead
+        const firstName = name.split(' ')[0];
+
+        let welcomeMsg = "";
+        if (intent === 'enrollment' || intent === 'matricula') {
+            welcomeMsg = `Olá, ${firstName}! 👋\n\nVi que você se interessou pela matrícula na XPACE pelo nosso site. 🤩\n\nEu sou o X-Bot e posso tirar todas as suas dúvidas agora mesmo. Quer ver os planos ou horários?`;
+        } else if (intent === 'doubt') {
+            welcomeMsg = `Olá, ${firstName}! 👋\n\nRecebemos seu contato pelo site. Como posso ajudar com sua dúvida?`;
+        } else {
+            welcomeMsg = `Oi, ${firstName}! 👋\n\nObrigado pelo contato no site da XPACE. Logo nossa equipe vai te responder, mas se quiser agilizar, pode falar comigo por aqui!`;
+        }
+
+        await sendMessage(jid, welcomeMsg);
+
+        // 3. Notifica os Sócios do Lead Quente
+        await notifySocios(`🚀 NOVO LEAD DO SITE: ${intent}\nNome: ${name}\nTel: ${phone}`, { jid, name });
+
+        // 4. Salva estado inicial se necessário (Opcional - já coloca no menu)
+        // await saveFlowState(jid, 'MENU_MAIN'); 
+
+        res.status(200).json({ success: true, message: 'Lead processed' });
+
+    } catch (error) {
+        console.error('Erro ao processar lead do site:', error);
+        res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
 });
 
 // Queue para processar mensagens sequencialmente por usuário
@@ -214,6 +272,142 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     const state = await getFlowState(from);
                     await sendProfessionalMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`);
                     return;
+                }
+
+                // ----------------------------------------------------
+                // 🌐 INTERCEPTAÇÃO: MENSAGEM DO SITE (Fallback)
+                // ----------------------------------------------------
+                // Se o usuário clicou no link "Enviar no WhatsApp" do site, o texto vem padronizado.
+                // Devemos tratar isso como um Lead do Site, e não deixar cair no "dança" genérico.
+                // ----------------------------------------------------
+                // 🌐 INTERCEPTAÇÃO: GRADE DE HORÁRIOS (Botão do Card)
+                // ----------------------------------------------------
+                // Texto: "Olá! Vi a aula de *Street Dance Kids* de *SEGUNDA às 08:00* no site..."
+                if (msgBody?.includes('Vi a aula de') || msgBody?.includes('agendar uma experimental')) {
+                    console.log(`[SCHEDULE LEAD] Detectado click na Grade de Horários: ${from}`);
+
+                    const firstName = pushName;
+
+                    // Tenta identificar a modalidade no meio do texto
+                    const lowerMsg = msgBody.toLowerCase();
+                    let targetModality = "";
+
+                    if (lowerMsg.includes('street') || lowerMsg.includes('urbana') || lowerMsg.includes('funk')) targetModality = 'street';
+                    else if (lowerMsg.includes('jazz') || lowerMsg.includes('contempor')) targetModality = 'jazz';
+                    else if (lowerMsg.includes('k-pop') || lowerMsg.includes('kpop')) targetModality = 'kpop';
+                    else if (lowerMsg.includes('ritmos') || lowerMsg.includes('ballet')) targetModality = 'ritmos';
+                    else if (lowerMsg.includes('teatro') || lowerMsg.includes('acrobacia')) targetModality = 'teatro';
+                    else if (lowerMsg.includes('heels') || lowerMsg.includes('salto')) targetModality = 'heels';
+                    else if (lowerMsg.includes('luta') || lowerMsg.includes('muay') || lowerMsg.includes('jiu')) targetModality = 'lutas';
+                    else if (lowerMsg.includes('populares') || lowerMsg.includes('culture') || lowerMsg.includes('hall')) targetModality = 'populares';
+                    else if (lowerMsg.includes('salao') || lowerMsg.includes('salão') || lowerMsg.includes('gafieira')) targetModality = 'salao';
+
+                    console.log(`[SCHEDULE DEBUG] Msg: "${lowerMsg}" | Target: "${targetModality}"`);
+
+                    if (targetModality) {
+                        await sendProfessionalMessage(from, `Olá, ${firstName}! 👋\n\nQue legal que você se interessou pela aula da grade! 🤩`);
+
+                        // Reaproveita a lógica de exibir detalhes
+                        // Simula o comportamento do "NOVA MENSAGEM DO SITE" redirecionando internamente
+                        // Para evitar duplicar código, poderíamos refatorar, mas vamos manter simples por agora.
+
+                        let details = "";
+                        if (targetModality === 'street') details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
+                        if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
+                        if (targetModality === 'kpop') details = "🇰🇷 *K-POP*\n\nCoreografias dos seus idols favoritos!\n\n*TURMAS (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)";
+                        if (targetModality === 'heels') details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
+                        if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)\n\n*BALLET (3+ e Adulto)*\n▫️ Consulte grade completa.";
+                        if (targetModality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
+                        if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
+                        if (targetModality === 'populares') details = "🇧🇷 *DANÇAS POPULARES & INTERNACIONAIS*\n\nCultura e movimento!\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)\n▫️ Sáb 14:30 (XTAGE) - Cia\n\n*DANCEHALL / SALÃO (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+                        if (targetModality === 'salao') details = "💃 *DANÇA DE SALÃO*\n\nPara dançar junto e se conectar!\n\n*TURMA REGULAR (18+)*\n▫️ Ter 20:00 (XLAB)\n\n*SALÃO / DANCEHALL (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+
+                        await sendProfessionalMessage(from, details);
+                        await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
+
+                        setTimeout(async () => {
+                            await sendList(from, "Próximos Passos", "Gostou dos horários?", "O QUE FAZER?", [
+                                { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
+                            ]);
+                        }, 2000);
+
+                        await notifySocios(`🚀 NOVO LEAD DA GRADE: ${msgBody}\nDe: ${pushName}`, { jid: from, name: pushName });
+                        return;
+                    }
+                }
+
+                // ----------------------------------------------------
+                // 🌐 INTERCEPTAÇÃO: MENSAGEM DO SITE (Fallback)
+                // ----------------------------------------------------
+                if (msgBody?.includes('NOVA MENSAGEM DO SITE')) {
+                    console.log(`[SITE FALLBACK] Detectado texto do site vindo de ${from}`);
+
+                    const firstName = pushName;
+
+                    // Extrair a mensagem real do usuário (pós "Mensagem:")
+                    const parts = msgBody.split('*Mensagem:*');
+                    const userMessage = parts.length > 1 ? parts[1].trim() : "";
+
+                    // 1. Tenta identificar Modalidade Direta
+                    const lowerMsg = userMessage.toLowerCase();
+                    let targetModality = "";
+
+                    if (lowerMsg.includes('street') || lowerMsg.includes('urbana') || lowerMsg.includes('funk')) targetModality = 'street';
+                    else if (lowerMsg.includes('jazz') || lowerMsg.includes('contempor')) targetModality = 'jazz';
+                    else if (lowerMsg.includes('k-pop') || lowerMsg.includes('kpop')) targetModality = 'kpop';
+                    else if (lowerMsg.includes('ritmos') || lowerMsg.includes('ballet')) targetModality = 'ritmos';
+                    else if (lowerMsg.includes('teatro') || lowerMsg.includes('acrobacia')) targetModality = 'teatro';
+                    else if (lowerMsg.includes('heels') || lowerMsg.includes('salto')) targetModality = 'heels';
+                    else if (lowerMsg.includes('luta') || lowerMsg.includes('muay') || lowerMsg.includes('jiu')) targetModality = 'lutas';
+                    else if (lowerMsg.includes('populares') || lowerMsg.includes('culture') || lowerMsg.includes('hall')) targetModality = 'populares';
+                    else if (lowerMsg.includes('salao') || lowerMsg.includes('salão') || lowerMsg.includes('gafieira')) targetModality = 'salao';
+
+                    if (targetModality) {
+                        // 🎯 MATCH! Usuário já sabe o que quer.
+                        await sendProfessionalMessage(from, `Olá, ${firstName}! 👋\n\nVi que você tem interesse em *${targetModality.toUpperCase()}*! Ótima escolha. 🤩`);
+
+                        // Simula seleção de menu e detalhes
+                        let details = "";
+                        if (targetModality === 'street') details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
+                        if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
+                        if (targetModality === 'kpop') details = "🇰🇷 *K-POP*\n\nCoreografias dos seus idols favoritos!\n\n*TURMAS (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)";
+                        if (targetModality === 'heels') details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
+                        if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)\n\n*BALLET (3+ e Adulto)*\n▫️ Consulte grade completa.";
+                        if (targetModality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
+                        if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
+                        if (targetModality === 'populares') details = "🇧🇷 *DANÇAS POPULARES & INTERNACIONAIS*\n\nCultura e movimento!\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)\n▫️ Sáb 14:30 (XTAGE) - Cia\n\n*DANCEHALL / SALÃO (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+                        if (targetModality === 'salao') details = "💃 *DANÇA DE SALÃO*\n\nPara dançar junto e se conectar!\n\n*TURMA REGULAR (18+)*\n▫️ Ter 20:00 (XLAB)\n\n*SALÃO / DANCEHALL (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+
+                        await sendProfessionalMessage(from, details);
+                        await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
+
+                        setTimeout(async () => {
+                            await sendList(from, "Próximos Passos", "Gostou dos horários?", "O QUE FAZER?", [
+                                { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
+                            ]);
+                        }, 2000);
+
+                        await notifySocios(`🚀 NOVO LEAD VIA LINK (JÁ FILTRADO): ${targetModality.toUpperCase()}\nDe: ${pushName}`, { jid: from, name: pushName });
+                        return;
+
+                    } else {
+                        // 2. Não achou modalidade? Usa a IA para acolher a dúvida específica
+                        console.log(`[SITE AI] Gerando resposta inteligente para: ${userMessage}`);
+                        await sendPresence(from, 'composing');
+
+                        const aiResponse = await generateResponse(userMessage, [], XPACE_CONTEXT + "\n\nCONTEXTO ATUAL: O usuário acabou de vir do site. Seja breve. Se ele fez uma pergunta, responda. Se só disse 'oi', convide para o menu.");
+
+                        await sendProfessionalMessage(from, aiResponse);
+                        await notifySocios(`🚀 NOVO LEAD VIA LINK (DÚVIDA): ${userMessage}\nDe: ${pushName}`, { jid: from, name: pushName });
+
+                        setTimeout(async () => {
+                            await sendList(from, "Menu XPACE", "Se preferir, navegue por aqui:", "ABRIR MENU", [
+                                { title: "Navegação", rows: [{ id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" }, { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" }, { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }] }
+                            ]);
+                            await saveFlowState(from, 'MENU_MAIN');
+                        }, 4000);
+                        return;
+                    }
                 }
 
                 // ----------------------------------------------------
