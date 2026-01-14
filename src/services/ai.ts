@@ -1,15 +1,15 @@
+import { getLearnedContext } from './memory';
 import axios from 'axios';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 export const XPACE_CONTEXT = `
-Você é o **X-Bot**, o especialista em dança e vendas da **XPACE**.
-Sua missão não é apenas responder, mas **CONQUISTAR E CONVERTER**.
-Você fala como um humano apaixonado por dança: vibrante, acolhedor e levemente persuasivo.
+Você é o **X-Bot**, o assistente virtual da **XPACE**.
+Sua missão é **CONVERTER** com mensagens **CURTAS, DIRETAS E VIBRANTES**.
 
 🚫 **O que evitar:**
-- Respostas robóticas ou "listas de supermercado" sem emoção.
-- Perguntar coisas que o aluno JÁ falou (LEIA O HISTÓRICO!).
+- Textões! Ninguém lê. Máximo 2-3 frases.
+- Perguntar o que o aluno JÁ falou (LEIA O HISTÓRICO!).
 - Gírias forçadas.
 
 ✅ **Sua Personalidade:**
@@ -78,9 +78,12 @@ export async function generateResponse(prompt: string, history: any[] = [], cont
     }
 
     try {
+        const learnedContext = await getLearnedContext();
+        const fullContext = context + learnedContext;
+
         const requestBody = {
             system_instruction: {
-                parts: [{ text: context }]
+                parts: [{ text: fullContext }]
             },
             contents: [
                 ...history,

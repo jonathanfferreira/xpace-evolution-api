@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
-import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState } from './services/memory';
+import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState, saveLearnedResponse } from './services/memory';
 import { generateResponse, XPACE_CONTEXT } from './services/ai';
 import { sendMessage, sendProfessionalMessage, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
 import { addLabelToConversation } from './services/chatwoot';
@@ -270,6 +270,16 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 // Se eu (humano) respondi, o bot tem que calar a boca.
                 console.log(`[HANDOFF] Intervenção humana detectada para ${from}. Pausando bot.`);
                 await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
+
+                // 🧠 APRENDIZADO AUTOMÁTICO
+                // Pega a última pergunta do usuário para salvar o par (Pergunta -> Resposta do Humano)
+                const history = await getHistory(from);
+                const lastUserMsg = history.reverse().find(m => m.role === 'user');
+
+                if (lastUserMsg && lastUserMsg.parts[0].text) {
+                    // Salva o aprendizado
+                    await saveLearnedResponse(lastUserMsg.parts[0].text, text);
+                }
             }
 
             res.sendStatus(200);
@@ -379,15 +389,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             // Para evitar duplicar código, poderíamos refatorar, mas vamos manter simples por agora.
 
                             let details = "";
-                            if (targetModality === 'street') details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
-                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
-                            if (targetModality === 'kpop') details = "🇰🇷 *K-POP*\n\nCoreografias dos seus idols favoritos!\n\n*TURMAS (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)";
-                            if (targetModality === 'heels') details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
-                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)\n\n*BALLET (3+ e Adulto)*\n▫️ Consulte grade completa.";
-                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
-                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
-                            if (targetModality === 'populares') details = "🇧🇷 *DANÇAS POPULARES & INTERNACIONAIS*\n\nCultura e movimento!\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)\n▫️ Sáb 14:30 (XTAGE) - Cia\n\n*DANCEHALL / SALÃO (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
-                            if (targetModality === 'salao') details = "💃 *DANÇA DE SALÃO*\n\nPara dançar junto e se conectar!\n\n*TURMA REGULAR (18+)*\n▫️ Ter 20:00 (XLAB)\n\n*SALÃO / DANCEHALL (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
+                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
+                            if (targetModality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nTer/Qui 20h (XTAGE)";
+                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
+                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS (15+):* Seg/Qua 19h | Ter/Qui 19h\n*BALLET:* Consulte grade.";
+                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
+                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
+                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*DANCEHALL (15+):* Sáb 14h30";
+                            if (targetModality === 'salao') details = "💃 *SALÃO (18+)*\n\nTer 20h\n*DANCEHALL/SALÃO:* Sáb 14h30";
 
                             await sendProfessionalMessage(from, details);
                             await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
@@ -435,15 +445,16 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                             // Simula seleção de menu e detalhes
                             let details = "";
-                            if (targetModality === 'street') details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
-                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
-                            if (targetModality === 'kpop') details = "🇰🇷 *K-POP*\n\nCoreografias dos seus idols favoritos!\n\n*TURMAS (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)";
-                            if (targetModality === 'heels') details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
-                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)\n\n*BALLET (3+ e Adulto)*\n▫️ Consulte grade completa.";
-                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
-                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
-                            if (targetModality === 'populares') details = "🇧🇷 *DANÇAS POPULARES & INTERNACIONAIS*\n\nCultura e movimento!\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)\n▫️ Sáb 14:30 (XTAGE) - Cia\n\n*DANCEHALL / SALÃO (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
-                            if (targetModality === 'salao') details = "💃 *DANÇA DE SALÃO*\n\nPara dançar junto e se conectar!\n\n*TURMA REGULAR (18+)*\n▫️ Ter 20:00 (XLAB)\n\n*SALÃO / DANCEHALL (15+)*\n▫️ Sáb 14:30 e 15:30 (XLAB)";
+
+                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
+                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
+                            if (targetModality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nTer/Qui 20h (XTAGE)";
+                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
+                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS (15+):* Seg/Qua 19h | Ter/Qui 19h\n*BALLET:* Consulte grade.";
+                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
+                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
+                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*DANCEHALL (15+):* Sáb 14h30";
+                            if (targetModality === 'salao') details = "💃 *SALÃO (18+)*\n\nTer 20h\n*DANCEHALL/SALÃO:* Sáb 14h30";
 
                             await sendProfessionalMessage(from, details);
                             await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
@@ -532,20 +543,19 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         // OPÇÃO 2: VER PREÇOS
                         if (input === 'menu_prices' || input === '2' || input.includes('preço') || input.includes('valor')) {
                             await sendProfessionalMessage(from,
-                                `💰 *Investimento XPACE (2026)* 🚀\n\n` +
-                                `Escolha o plano que melhor se adapta à sua rotina:\n\n` +
-                                `� *PASSE LIVRE (Acesso Total):* R$ 350/mês\n_Faça quantas aulas quiser de qualquer modalidade!_\n\n` +
-                                `*PLANOS REGULARES (2x na semana)*\n` +
-                                `💎 *Anual:* R$ 165/mês (Melhor Valor)\n` +
-                                `💳 *Semestral:* R$ 195/mês\n` +
-                                `🎟️ *Mensal:* R$ 215/mês\n\n` +
-                                `*TURMAS 1x NA SEMANA*\n` +
-                                `💎 *Anual:* R$ 100/mês\n` +
-                                `💳 *Semestral:* R$ 115/mês\n` +
-                                `🎟️ *Mensal:* R$ 130/mês\n\n` +
-                                `_Quer garantir sua vaga?_\n` +
-                                `🔗 https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
-                                `_Digite 0 para voltar._`
+                                `💰 *INVESTIMENTO XPACE 2026*\n\n` +
+                                `💎 *PASSE LIVRE:* R$ 350 (Tudo liberado!)\n` +
+                                `-----------\n` +
+                                `*PLANOS 2X SEMANA:*\n` +
+                                `• Anual: R$ 165/mês\n` +
+                                `• Semestral/Mensal: Consulte\n\n` +
+                                `*PLANOS 1X SEMANA:*\n` +
+                                `• Anual: R$ 100/mês\n\n` +
+                                `💳 *ACEITAMOS:*\n` +
+                                `• *Wellhub:* Silver+ (Agendar no App)\n` +
+                                `• *TotalPass:* TP3+\n\n` +
+                                `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
+                                `_0 p/ voltar._`
                             );
                             return;
                         }
@@ -559,8 +569,8 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                         // OPÇÃO 4: HUMANO
                         if (input === 'menu_human' || input === '4' || input.includes('humano') || input.includes('atendente')) {
-                            await sendProfessionalMessage(from, "Entendi, às vezes é bom falar com gente de verdade! 😄\n\nJá notifiquei a equipe (Alceu/Ruan/Jhonney). Em alguns instantes alguém te chama por aqui. ⏳");
-                            await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
+                            await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde um pouquinho que já te respondemos! ⏳");
+                            // await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
                             addLabelToConversation(from, 'human_handoff').catch(console.error);
                             return;
                         }
@@ -715,32 +725,32 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                             switch (mod) {
                                 case 'street':
-                                    details = "👟 *DANÇAS URBANAS (Street & Funk)*\n\nA alma da XPACE! 🧢\n\n*KIDS (6+ anos)*\n▫️ Seg/Qua 08:00 (XPERIENCE)\n▫️ Seg/Qua 14:30 (XLAB)\n▫️ Seg/Qua 19:00 (XCORE)\n\n*TEENS (12+ anos) & INICIANTE*\n▫️ Ter/Qui 09:00 — Teens (XPERIENCE)\n▫️ Ter/Qui 14:30 — Iniciante (XLAB)\n▫️ Seg/Qua 19:00 — Junior (XPERIENCE)\n\n*ADULTO (16/18+)*\n▫️ Seg/Qua 20:00 — Sênior (XPERIENCE)\n▫️ Ter/Qui 21:00 — Iniciante (XLAB)\n▫️ Sex 19:00 — Iniciante (XPERIENCE)\n▫️ Sáb 10:00 — Geral (XPERIENCE)\n\n*STREET FUNK (15+)*\n▫️ Sex 20:00 — Geral (XPERIENCE)";
+                                    details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
                                     break;
                                 case 'jazz':
-                                    details = "🦢 *JAZZ & CONTEMPORÂNEO*\n\nTécnica, expressão e movimento. ✨\n\n*JAZZ FUNK (15+)*\n▫️ Ter 19:00 (XLAB)\n▫️ Sáb 09:00 (XPERIENCE)\n\n*JAZZ TÉCNICO*\n▫️ Seg/Qua 20:00 — 12+ (XCORE)\n▫️ Seg/Qua 21:00 — 18+ (XPERIENCE)\n▫️ Sáb 09:00 — 6+ (XLAB)\n\n*CONTEMPORÂNEO (12+)*\n▫️ Seg/Qua 19:00 (XLAB)";
+                                    details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
                                     break;
                                 case 'kpop':
                                 case 'salao': // Juntando K-Pop em estilos se necessário, ou mantendo separado
-                                    details = "💃 *DANÇA DE SALÃO & ESTILOS*\n\n*K-POP (12+)*\n▫️ Ter/Qui 20:00 (XTAGE)\n\n*DANÇA DE SALÃO (18+)*\n▫️ Ter/Qui 20:00 (XLAB)\n\n*DANCEHALL (15+)*\n▫️ Sáb 14:30 (XLAB)\n\n*DANÇAS POPULARES (12+)*\n▫️ Seg/Qua 14:00 (XPERIENCE)";
+                                    details = "💃 *OUTROS ESTILOS*\n\n*K-POP (12+):* Ter/Qui 20h\n*SALÃO (18+):* Ter 20h\n*DANCEHALL (15+):* Sáb 14h30\n*POPULARES (12+):* Seg/Qua 14h";
                                     break;
                                 case 'heels':
-                                    details = "👠 *HEELS (DANÇA NO SALTO)*\n\nEmpoderamento e atitude nas alturas!\n\n*TURMAS REGULARES (15+)*\n▫️ Qui 19:00 (XLAB)\n▫️ Sáb 11:00 (XPERIENCE)\n\n*CIA HEELS (Grupo de Estudo)*\n▫️ Sáb 14:00 (XPERIENCE)";
+                                    details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
                                     break;
                                 case 'ritmos':
-                                    details = "💃 *RITMOS*\n\nMix de danças para suar e se divertir! (15+)\n\n▫️ Seg/Qua 19:00 (XTAGE)\n▫️ Ter/Qui 19:00 (XCORE)";
+                                    details = "💃 *RITMOS (15+)*\n\nSeg/Qua 19h | Ter/Qui 19h";
                                     break;
                                 case 'ballet':
-                                    details = "🩰 *BALLET CLÁSSICO*\n\n*BABY CLASS (3+)*\n▫️ Ter/Qui 15:30 (XLAB)\n\n*BALLET INICIANTE (12+)*\n▫️ Ter/Qui 20:00 (XCORE)";
+                                    details = "🩰 *BALLET*\n\n*BABY (3+):* Ter/Qui 15h30\n*INIC (12+):* Ter/Qui 20h";
                                     break;
                                 case 'teatro':
-                                    details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO*\n▫️ Seg/Qua 09:00 — 12+ (XPERIENCE)\n▫️ Seg/Qua 15:30 — 15+ (XLAB)\n\n*ACROBACIAS (12+)*\n▫️ Seg/Qua 20:00 (XTAGE)";
+                                    details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
                                     break;
                                 case 'lutas':
-                                    details = "🥊 *LUTAS*\n\n*MUAY THAI (12+)*\n▫️ Ter/Qui 19:00 (XTAGE)\n\n*JIU JITSU (6+)*\n▫️ Sex 19:00 (XLAB)";
+                                    details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
                                     break;
                                 case 'outros':
-                                    details = "✨ *AULAS ESPECIAIS*\n\n*HEELS (Salto)*\n▫️ Ver categoria Heels\n\n*LUTAS*\n▫️ Muay Thai e Jiu Jitsu\n\n*BALLET*\n▫️ Infantil e Adulto\n\n_Escolha voltar ao menu para ver mais opções!_";
+                                    details = "✨ *ESPECIAIS*\n\nVeja as categorias Heels, Lutas ou Ballet no menu para mais detalhes!";
                                     break;
                             }
 
@@ -873,8 +883,12 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         }
                         // --------------------------------------
 
+                        /* 
+                        // --- IA ATIVA DESLIGADA (MODO STANDBY) ---
+                        // Apenas aprendendo, não respondendo.
+                        
                         const history = await getHistory(from);
-                        const aiResponse = await generateResponse(msgBody, history);
+                        const aiResponse = await generateResponse(msgBody, history); // <-- IA geraria aqui
 
                         if (!aiResponse.startsWith("Erro:")) {
                             await saveMessage(from, 'user', msgBody);
@@ -882,6 +896,20 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         }
 
                         await sendProfessionalMessage(from, aiResponse);
+                        */
+
+                        // --- FALLBACK MANUAL (STANDBY) ---
+                        await sendProfessionalMessage(from,
+                            "Desculpe, eu sou apenas um robô de triagem e ainda estou aprendendo! 🤖\n\n" +
+                            "Não entendi sua mensagem. Por favor, use uma das opções do *Menu* ou escolha *Falar com Humano* (Opção 4) para que nossa equipe te ajude. 👇"
+                        );
+
+                        // Reenvia menu para facilitar
+                        setTimeout(async () => {
+                            await sendList(from, "Menu XPACE", "Escolha uma opção:", "ABRIR MENU", [
+                                { title: "Navegação", rows: [{ id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" }, { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" }, { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }] }
+                            ]);
+                        }, 1500);
                     }
                 }
 

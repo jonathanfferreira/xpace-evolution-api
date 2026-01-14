@@ -38,6 +38,14 @@ export async function ensureDbInitialized() {
                 data JSONB DEFAULT '{}',
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             );
+
+            -- Tabela de Aprendizado da IA
+            CREATE TABLE IF NOT EXISTS ai_learning (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
         `);
 
         console.log('✅ Database initialized (Memory + Flow State)');
@@ -146,5 +154,40 @@ export async function deleteFlowState(userId: string) {
         await pool.query('DELETE FROM flow_states WHERE user_id = $1', [userId]);
     } catch (error) {
         console.error('Error deleting flow state from DB:', error);
+    }
+}
+
+// --- AI Learning ---
+
+export async function saveLearnedResponse(question: string, answer: string) {
+    try {
+        // Evita duplicatas exatas recentes? Por enquanto salva tudo.
+        await pool.query(
+            'INSERT INTO ai_learning (question, answer) VALUES ($1, $2)',
+            [question, answer]
+        );
+        console.log('🧠 [LEARNING] New QA pair saved.');
+    } catch (error) {
+        console.error('Error saving learned response:', error);
+    }
+}
+
+export async function getLearnedContext(): Promise<string> {
+    try {
+        // Pega os últimos 20 aprendizados
+        const res = await pool.query(`
+            SELECT question, answer 
+            FROM ai_learning 
+            ORDER BY created_at DESC 
+            LIMIT 20
+        `);
+
+        if (res.rows.length === 0) return "";
+
+        const context = res.rows.map(row => `P: ${row.question}\nR: ${row.answer}`).join('\n---\n');
+        return `\n\n📚 **HISTÓRICO DE RESPOSTAS (APRENDIZADO):**\nUse essas respostas anteriores do dono como base:\n${context}\n`;
+    } catch (error) {
+        console.error('Error getting learned context:', error);
+        return "";
     }
 }
