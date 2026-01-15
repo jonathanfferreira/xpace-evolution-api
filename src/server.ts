@@ -242,50 +242,6 @@ app.post('/webhook', async (req: Request, res: Response) => {
         // LOG COMPLETO PARA DEBUG
         console.log('>>> FULL WEBHOOK PAYLOAD:', JSON.stringify(body, null, 2));
 
-        // ----------------------------------------------------
-        // 🚨 INTERCEPTAÇÃO: MENSAGEM DO DONO (Handoff)
-        // ----------------------------------------------------
-        if (data.key.fromMe) {
-            const from = data.key.remoteJid;
-            const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
-
-            if (text) {
-                // COMANDO: /bot (Retomar controle)
-                if (text.toLowerCase().trim() === '/bot') {
-                    console.log(`[HANDOFF] Dono retomou o bot para ${from}`);
-                    await deleteFlowState(from);
-                    await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.");
-                    return;
-                }
-
-                // COMANDO: /stop (Pausar forçadamente)
-                if (text.toLowerCase().trim() === '/stop') {
-                    console.log(`[HANDOFF] Dono pausou o bot para ${from}`);
-                    await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
-                    await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.");
-                    return;
-                }
-
-                // QUALQUER OUTRA MENSAGEM DO DONO -> PAUSA O BOT
-                // Se eu (humano) respondi, o bot tem que calar a boca.
-                console.log(`[HANDOFF] Intervenção humana detectada para ${from}. Pausando bot.`);
-                await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
-
-                // 🧠 APRENDIZADO AUTOMÁTICO
-                // Pega a última pergunta do usuário para salvar o par (Pergunta -> Resposta do Humano)
-                const history = await getHistory(from);
-                const lastUserMsg = history.reverse().find(m => m.role === 'user');
-
-                if (lastUserMsg && lastUserMsg.parts[0].text) {
-                    // Salva o aprendizado
-                    await saveLearnedResponse(lastUserMsg.parts[0].text, text);
-                }
-            }
-
-            res.sendStatus(200);
-            return;
-        }
-
         const from = data?.key?.remoteJid;
         if (!from) {
             console.log('[WEBHOOK] Mensagem sem remetente (ignorado).');
@@ -293,36 +249,78 @@ app.post('/webhook', async (req: Request, res: Response) => {
             return;
         }
 
-        // ----------------------------------------------------
-        // 🛡️ VERIFICAÇÃO DE HANDOFF (O BOT ESTÁ PAUSADO?)
-        // ----------------------------------------------------
-        const currentState = await getFlowState(from);
-
-        if (currentState?.step === 'HUMAN_INTERVENTION') {
-            const lastIntervention = currentState.data?.timestamp || 0;
-            const timeDiff = Date.now() - lastIntervention;
-            const MINUTES_30 = 30 * 60 * 1000;
-
-            if (timeDiff < MINUTES_30) {
-                console.log(`[HANDOFF] Bot silenciado para ${from} (Intervenção Humana recente).`);
-
-                // Opcional: Se o usuário mandar /bot, ele também pode reativar? 
-                // Por enquanto não, só o dono via fromMe.
-
-                res.sendStatus(200);
-                return;
-            } else {
-                console.log(`[HANDOFF] Tempo de silêncio acabou para ${from}. Bot voltando...`);
-                await deleteFlowState(from);
-                // Segue o fluxo normal abaixo...
-            }
-        }
-
         // Adiciona o processamento à fila do usuário
         const processMessage = async () => {
             try {
                 const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
                 const messageKey = data.key;
+
+                // 1. EXTRAÇÃO DA MENSAGEM (MOVIDO PARA BAIXO)
+
+                // ----------------------------------------------------
+                // 🚨 INTERCEPTAÇÃO: MENSAGEM DO DONO (Handoff) - DENTRO DA PROMISE
+                // ----------------------------------------------------
+                // Agora verificamos isso AQUI, para garantir ordem sequencial com as mensagens do usuário
+                if (data.key.fromMe) {
+                    const from = data.key.remoteJid;
+                    if (!from) return;
+
+                    const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
+
+                    if (text) {
+                        // COMANDO: /bot (Retomar controle)
+                        if (text.toLowerCase().trim() === '/bot') {
+                            console.log(`[HANDOFF] Dono retomou o bot para ${from}`);
+                            await deleteFlowState(from);
+                            await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.");
+                            return;
+                        }
+
+                        // COMANDO: /stop (Pausar forçadamente)
+                        if (text.toLowerCase().trim() === '/stop') {
+                            console.log(`[HANDOFF] Dono pausou o bot para ${from}`);
+                            await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
+                            await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.");
+                            return;
+                        }
+
+                        // QUALQUER OUTRA MENSAGEM DO DONO -> PAUSA O BOT
+                        // Se eu (humano) respondi, o bot tem que calar a boca.
+                        console.log(`[HANDOFF] Intervenção humana detectada para ${from}. Pausando bot.`);
+                        // Salva estado de intervenção
+                        await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
+
+                        // 🧠 APRENDIZADO AUTOMÁTICO
+                        // Pega a última pergunta do usuário para salvar o par (Pergunta -> Resposta do Humano)
+                        const history = await getHistory(from);
+                        const lastUserMsg = history.reverse().find(m => m.role === 'user');
+
+                        if (lastUserMsg && lastUserMsg.parts[0].text) {
+                            // Salva o aprendizado
+                            await saveLearnedResponse(lastUserMsg.parts[0].text, text);
+                        }
+                    }
+                    return; // Sai, pois mensagem minha não gera resposta do bot
+                }
+
+
+                // 🛡️ VERIFICAÇÃO DE HANDOFF (O BOT ESTÁ PAUSADO?) - CHECK DUPLO
+                // Verifica novamente AGORA que estamos processando a mensagem (evita race condition)
+                const currentState = await getFlowState(from);
+
+                if (currentState?.step === 'HUMAN_INTERVENTION' || currentState?.step === 'WAITING_FOR_HUMAN') {
+                    const lastIntervention = currentState.data?.timestamp || 0;
+                    const timeDiff = Date.now() - lastIntervention;
+                    const MINUTES_30 = 30 * 60 * 1000;
+
+                    if (timeDiff < MINUTES_30) {
+                        console.log(`[HANDOFF] Bot silenciado para ${from} (Intervenção/Espera).`);
+                        return; // 🔇 SILÊNCIO TOTAL
+                    } else {
+                        console.log(`[HANDOFF] Tempo de silêncio acabou para ${from}. Bot voltando...`);
+                        await deleteFlowState(from);
+                    }
+                }
 
                 // 1. EXTRAÇÃO DA MENSAGEM
                 let msgBody = data.message?.conversation ||
@@ -570,7 +568,9 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         // OPÇÃO 4: HUMANO
                         if (input === 'menu_human' || input === '4' || input.includes('humano') || input.includes('atendente')) {
                             await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde um pouquinho que já te respondemos! ⏳");
-                            // await notifySocios(`🚨 Humano Solicitado: ${pushName}`, { jid: from, name: pushName });
+                            // 🛑 PARAR BOT AQUI
+                            await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
+                            await notifySocios(`🚨 SOLICITAÇÃO DE HUMANO: ${pushName}`, { jid: from, name: pushName });
                             addLabelToConversation(from, 'human_handoff').catch(console.error);
                             return;
                         }
@@ -883,26 +883,21 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         }
                         // --------------------------------------
 
-                        /* 
-                        // --- IA ATIVA DESLIGADA (MODO STANDBY) ---
+                        // --- IA ATIVA (REATIVADA) ---
                         // Apenas aprendendo, não respondendo.
-                        
+
                         const history = await getHistory(from);
                         const aiResponse = await generateResponse(msgBody, history); // <-- IA geraria aqui
 
                         if (!aiResponse.startsWith("Erro:")) {
                             await saveMessage(from, 'user', msgBody);
                             await saveMessage(from, 'model', aiResponse);
+                            await sendProfessionalMessage(from, aiResponse);
+                        } else {
+                            console.error("Erro IA:", aiResponse);
+                            // Se der erro, aí sim podemos usar um fallback ou apenas não responder
+                            await sendProfessionalMessage(from, "Desculpe, estou com uma instabilidade momentânea. Tente novamente em instantes.");
                         }
-
-                        await sendProfessionalMessage(from, aiResponse);
-                        */
-
-                        // --- FALLBACK MANUAL (STANDBY) ---
-                        await sendProfessionalMessage(from,
-                            "Desculpe, eu sou apenas um robô de triagem e ainda estou aprendendo! 🤖\n\n" +
-                            "Não entendi sua mensagem. Por favor, use uma das opções do *Menu* ou escolha *Falar com Humano* (Opção 4) para que nossa equipe te ajude. 👇"
-                        );
 
                         // Reenvia menu para facilitar
                         setTimeout(async () => {
