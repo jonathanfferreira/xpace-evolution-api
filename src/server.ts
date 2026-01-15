@@ -899,12 +899,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             await sendProfessionalMessage(from, "Desculpe, estou com uma instabilidade momentânea. Tente novamente em instantes.");
                         }
 
-                        // Reenvia menu para facilitar
-                        setTimeout(async () => {
-                            await sendList(from, "Menu XPACE", "Escolha uma opção:", "ABRIR MENU", [
-                                { title: "Navegação", rows: [{ id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" }, { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" }, { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }] }
-                            ]);
-                        }, 1500);
+
                     }
                 }
 
