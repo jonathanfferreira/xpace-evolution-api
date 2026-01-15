@@ -541,19 +541,20 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         // OPÇÃO 2: VER PREÇOS
                         if (input === 'menu_prices' || input === '2' || input.includes('preço') || input.includes('valor')) {
                             await sendProfessionalMessage(from,
-                                `💰 *INVESTIMENTO XPACE 2026*\n\n` +
-                                `💎 *PASSE LIVRE:* R$ 350 (Tudo liberado!)\n` +
-                                `-----------\n` +
-                                `*PLANOS 2X SEMANA:*\n` +
-                                `• Anual: R$ 165/mês\n` +
-                                `• Semestral/Mensal: Consulte\n\n` +
-                                `*PLANOS 1X SEMANA:*\n` +
-                                `• Anual: R$ 100/mês\n\n` +
-                                `💳 *ACEITAMOS:*\n` +
-                                `• *Wellhub:* Silver+ (Agendar no App)\n` +
-                                `• *TotalPass:* TP3+\n\n` +
+                                `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
+                                `Escolha o plano que melhor se adapta à sua rotina:\n\n` +
+                                `💎 *PASSE LIVRE (Acesso Total):* R$ 350/mês\n` +
+                                `_Faça quantas aulas quiser de qualquer modalidade!_\n\n` +
+                                `*PLANOS REGULARES (2x na semana)*\n` +
+                                `💎 Anual: R$ 165/mês (Melhor Valor)\n` +
+                                `💳 Semestral: R$ 195/mês\n` +
+                                `🎟️ Mensal: R$ 215/mês\n\n` +
+                                `*TURMAS 1x NA SEMANA*\n` +
+                                `💎 Anual: R$ 100/mês\n` +
+                                `💳 Semestral: R$ 115/mês\n` +
+                                `🎟️ Mensal: R$ 130/mês\n\n` +
                                 `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
-                                `_0 p/ voltar._`
+                                `_Digite 0 para voltar._`
                             );
                             return;
                         }
