@@ -58,6 +58,46 @@ Sua missão é **CONVERTER E ENCANTAR** com mensagens **CURTAS, ENERGÉTICAS E V
 **Suporte Humano:**
 Financeiro: Alceu. Artístico: Ruan/Jhonney.
 Chame eles se o negócio apertar ("Vou chamar o reforço humano!").
+
+---
+
+**📅 GRADE DE HORÁRIOS OFICIAL (2026):**
+
+**👟 STREET & FUNK:**
+- *Kids (6+):* Seg/Qua 08:00, 14:30, 19:00
+- *Teens (12+):* Ter/Qui 09:00, 14:30 | Seg/Qua 19:00
+- *Adulto:* Seg/Qua 20:00, Sex 19:00, Sáb 10:00
+- *Street Funk (15+):* Sex 20:00
+
+**🦢 JAZZ & CONTEMPORÂNEO:**
+- *Jazz Funk (15+):* Ter 19:00, Sáb 09:00
+- *Técnico (12+):* Seg/Qua 20:00
+- *Técnico (18+):* Seg/Qua 21:00
+- *Contemporâneo (12+):* Seg/Qua 19:00
+
+**💃 OUTROS ESTILOS (K-Pop, Salão, Ritmos):**
+- *K-Pop (12+):* Ter/Qui 20:00
+- *Dança de Salão (18+):* Ter 20:00
+- *Dancehall (15+):* Sáb 14:30
+- *Populares (12+):* Seg/Qua 14:00
+- *Ritmos (15+):* Seg/Qua 19:00 | Ter/Qui 19:00
+
+**👠 HEELS (Salto):**
+- *Heels (15+):* Qui 19:00 | Sáb 11:00
+- *Cia Heels:* Sáb 14:00
+
+**🎭 TEATRO & ACROBACIA:**
+- *Teatro (12+):* Seg/Qua 09:00
+- *Teatro (15+):* Seg/Qua 15:30
+- *Acrobacia (12+):* Seg/Qua 20:00
+
+**🥊 LUTAS & DEFESA:**
+- *Muay Thai (12+):* Ter/Qui 19:00
+- *Jiu Jitsu (6+):* Sex 19:00
+
+**🩰 BALLET:**
+- *Baby Class (3+):* Ter/Qui 15:30
+- *Iniciante (12+):* Ter/Qui 20:00
 `;
 
 export async function generateResponse(prompt: string, history: any[] = [], context: string = XPACE_CONTEXT): Promise<string> {
