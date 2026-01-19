@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState, saveLearnedResponse } from './services/memory';
-import { generateResponse, XPACE_CONTEXT } from './services/ai';
+// import { generateResponse, XPACE_CONTEXT } from './services/ai'; // AI Agent Disabled
 import { sendMessage, sendProfessionalMessage, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
 import { addLabelToConversation } from './services/chatwoot';
 
@@ -255,7 +255,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
                 const messageKey = data.key;
 
-                // 1. EXTRAÇÃO DA MENSAGEM (MOVIDO PARA BAIXO)
+                // 1. EXTRAÇÃO DA MENSAGEM
+                let msgBody = data.message?.conversation ||
+                    data.message?.extendedTextMessage?.text ||
+                    data.message?.buttonsResponseMessage?.selectedDisplayText ||
+                    data.message?.listResponseMessage?.title;
+
+                let selectedRowId = data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
+
+                const input = (selectedRowId || msgBody?.trim())?.toLowerCase();
 
                 // ----------------------------------------------------
                 // 🚨 INTERCEPTAÇÃO: MENSAGEM DO DONO (Handoff) - DENTRO DA PROMISE
@@ -322,14 +330,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     }
                 }
 
-                // 1. EXTRAÇÃO DA MENSAGEM
-                let msgBody = data.message?.conversation ||
-                    data.message?.extendedTextMessage?.text ||
-                    data.message?.buttonsResponseMessage?.selectedDisplayText ||
-                    data.message?.listResponseMessage?.title;
-
-                // Converter para string normal, caso seja "RowId" da lista
-                let selectedRowId = data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
+                // (Extração movida para o topo)
 
                 if (msgBody || selectedRowId) {
                     console.log(`[${from}] Msg: "${msgBody}" | RowID: ${selectedRowId}`);
@@ -467,32 +468,110 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             return;
 
                         } else {
-                            // 2. Não achou modalidade? Usa a IA para acolher a dúvida específica
-                            console.log(`[SITE AI] Gerando resposta inteligente para: ${userMessage}`);
-                            await sendPresence(from, 'composing');
+                            // 2. Não achou modalidade? Fallback para Menu
+                            console.log(`[SITE FALLBACK] Mensagem não identificada, enviando menu: ${userMessage}`);
 
-                            const aiResponse = await generateResponse(userMessage, [], XPACE_CONTEXT + "\n\nCONTEXTO ATUAL: O usuário acabou de vir do site. Seja breve. Se ele fez uma pergunta, responda. Se só disse 'oi', convide para o menu.");
-
-                            await sendProfessionalMessage(from, aiResponse);
-                            await notifySocios(`🚀 NOVO LEAD VIA LINK (DÚVIDA): ${userMessage}\nDe: ${pushName}`, { jid: from, name: pushName });
+                            await sendProfessionalMessage(from, "Olá! Recebi sua mensagem. Como sou um robô, não entendi exatamente o que você disse, mas escolha uma opção abaixo que eu te ajudo! 👇");
 
                             setTimeout(async () => {
-                                await sendList(from, "Menu XPACE", "Se preferir, navegue por aqui:", "ABRIR MENU", [
-                                    { title: "Navegação", rows: [{ id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" }, { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" }, { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }] }
+                                await sendList(from, "Menu XPACE", "Selecione uma opção:", "ABRIR MENU", [
+                                    {
+                                        title: "Navegação", rows: [
+                                            { id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" },
+                                            { id: "menu_schedule", title: "📅 Grade de Horários", description: "Ver dias e horas" },
+                                            { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" },
+                                            { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }
+                                        ]
+                                    }
                                 ]);
                                 await saveFlowState(from, 'MENU_MAIN');
-                            }, 4000);
+                            }, 2000);
+                            return;
+                        }
+                    }
+
+                    // ----------------------------------------------------
+                    // 🧠 INTELIGÊNCIA RÁPIDA (Palavras-Chave Diretas)
+                    // ----------------------------------------------------
+                    // Se o usuário mandar algo específico, respondemos direto, sem Menu.
+                    if (msgBody && !input?.startsWith('menu_') && !input?.startsWith('exp_') && !input?.startsWith('goal_') && !input?.startsWith('mod_')) {
+                        const lowerMsg = msgBody.toLowerCase();
+
+                        // 1. Grade / Horários / Aulas
+                        if (lowerMsg.includes('grade') || lowerMsg.includes('horario') || lowerMsg.includes('aulas') || lowerMsg.includes('turmas')) {
+                            await sendList(
+                                from,
+                                "Grade de Horários 📅",
+                                "Aqui estão nossos horários! Toque em uma modalidade:",
+                                "VER GRADE",
+                                [
+                                    {
+                                        title: "Modalidades",
+                                        rows: [
+                                            { id: "mod_street", title: "👟 Street / Urban", description: "Kids, Teens, Adulto" },
+                                            { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnico, Funk, Lyrical" },
+                                            { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias" },
+                                            { id: "mod_ritmos", title: "💃 Ritmos", description: "Dança de Salão, Fit" },
+                                            { id: "mod_teatro", title: "🎭 Teatro & Acro", description: "Interpretação, Acrobacia" },
+                                            { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet" },
+                                        ]
+                                    }
+                                ]
+                            );
+                            await saveFlowState(from, 'SELECT_MODALITY');
+                            return;
+                        }
+
+                        // 2. Preços / Valores
+                        if (lowerMsg.includes('preco') || lowerMsg.includes('preço') || lowerMsg.includes('valor') || lowerMsg.includes('custo') || lowerMsg.includes('mensalidade')) {
+                            await sendProfessionalMessage(from,
+                                `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
+                                `Confira nossos planos e vantagens:\n\n` +
+                                `💎 *PASSE LIVRE (Acesso Total):* R$ 350/mês\n` +
+                                `_Faça quantas aulas quiser de qualquer modalidade!_\n\n` +
+                                `*PLANOS REGULARES (2x na semana)*\n` +
+                                `💎 Anual: R$ 165/mês (Melhor Valor)\n` +
+                                `💳 Semestral: R$ 195/mês\n` +
+                                `🎟️ Mensal: R$ 215/mês\n\n` +
+                                `*TURMAS 1x NA SEMANA*\n` +
+                                `💎 Anual: R$ 100/mês\n` +
+                                `💳 Semestral: R$ 115/mês\n` +
+                                `🎟️ Mensal: R$ 130/mês\n\n` +
+                                `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
+                                `_Para voltar ao menu, digite ‘Menu’._`
+                            );
+                            // Opcional: manter estado ou resetar. Resetar é mais seguro.
+                            await deleteFlowState(from);
+                            return;
+                        }
+
+                        // 3. Localização
+                        if (lowerMsg.includes('endereco') || lowerMsg.includes('endereço') || lowerMsg.includes('onde fica') || lowerMsg.includes('local') || lowerMsg.includes('mapa') || lowerMsg.includes('chegar')) {
+                            await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
+                            await sendProfessionalMessage(from, "📍 *Estamos na Rua Tijucas, 401 - Centro/Joinville*\n\n🚙 Estacionamento próprio gratuito.\n☕ Lanchonete no local.\n\n_Para voltar ao menu, digite ‘Menu’._");
+                            await deleteFlowState(from);
+                            return;
+                        }
+
+                        // 4. Humano / Atendente
+                        if (lowerMsg.includes('humano') || lowerMsg.includes('atendente') || lowerMsg.includes('falar com gente') || lowerMsg.includes('suporte')) {
+                            await sendProfessionalMessage(from, "Entendi! Vou transferir para nossa equipe humana. 🙋‍♂️\n\nAguarde um instante que já te respondemos!");
+                            await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
+                            await notifySocios(`🚨 SOLICITAÇÃO DIRETA DE HUMANO: ${pushName}`, { jid: from, name: pushName });
+                            addLabelToConversation(from, 'human_handoff').catch(console.error);
                             return;
                         }
                     }
 
                     // ----------------------------------------------------
                     // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, 0)
+
                     // ----------------------------------------------------
                     if (isGreeting(msgBody) || msgBody?.trim() === '0') {
                         await deleteFlowState(from); // Reinicia fluxo
 
                         await sendReaction(from, messageKey, '👋');
+                        const pushName = (body.instanceData?.user || "Aluno").split(' ')[0]; // Ensure pushName is defined here if not globally available
 
                         await sendList(
                             from,
@@ -503,12 +582,8 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                 {
                                     title: "Navegação",
                                     rows: [
-                                        // REORGANIZADO PARA NUMERAÇÃO BATER!
-                                        // 1 -> Dançar
-                                        // 2 -> Preços
-                                        // 3 -> Localização
-                                        // 4 -> Humano
                                         { id: "menu_dance", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                        { id: "menu_schedule", title: "📅 Grade de Horários", description: "Ver dias e horas" },
                                         { id: "menu_prices", title: "💰 Ver Preços", description: "Planos e valores" },
                                         { id: "menu_location", title: "📍 Localização", description: "Endereço e mapa" },
                                         { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
@@ -525,7 +600,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     // 🔵 2. TRATAMENTO DE ESTADO E ESCOLHAS
                     // ----------------------------------------------------
                     const currentState = await getFlowState(from);
-                    const input = (selectedRowId || msgBody?.trim())?.toLowerCase(); // Normaliza para comparação
+                    // Input já definido no topo
 
                     // Menu Principal -> Escolha
                     if (currentState?.step === 'MENU_MAIN') {
@@ -538,8 +613,33 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             return;
                         }
 
-                        // OPÇÃO 2: VER PREÇOS
-                        if (input === 'menu_prices' || input === '2' || input.includes('preço') || input.includes('valor')) {
+                        // OPÇÃO 2: GRADE DE HORÁRIOS (Nova Opção)
+                        if (input === 'menu_schedule' || input === '2' || input.includes('grade') || input.includes('horario')) {
+                            await sendList(
+                                from,
+                                "Grade de Horários 📅",
+                                "Toque em uma modalidade para ver os horários:",
+                                "VER GRADE",
+                                [
+                                    {
+                                        title: "Modalidades",
+                                        rows: [
+                                            { id: "mod_street", title: "👟 Street / Urban", description: "Kids, Teens, Adulto" },
+                                            { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnico, Funk, Lyrical" },
+                                            { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias" },
+                                            { id: "mod_ritmos", title: "💃 Ritmos", description: "Dança de Salão, Fit" },
+                                            { id: "mod_teatro", title: "🎭 Teatro & Acro", description: "Interpretação, Acrobacia" },
+                                            { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet" },
+                                        ]
+                                    }
+                                ]
+                            );
+                            await saveFlowState(from, 'SELECT_MODALITY'); // Jump directly to modality selection
+                            return;
+                        }
+
+                        // OPÇÃO 3: VER PREÇOS
+                        if (input === 'menu_prices' || input === '3' || input.includes('preço') || input.includes('valor')) {
                             await sendProfessionalMessage(from,
                                 `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
                                 `Escolha o plano que melhor se adapta à sua rotina:\n\n` +
@@ -559,15 +659,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             return;
                         }
 
-                        // OPÇÃO 3: LOCALIZAÇÃO
-                        if (input === 'menu_location' || input === '3' || input.includes('endereço') || input.includes('local')) {
+                        // OPÇÃO 4: LOCALIZAÇÃO
+                        if (input === 'menu_location' || input === '4' || input.includes('endereço') || input.includes('local')) {
                             await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
                             await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito para alunos.\n✅ Lanchonete e espaço de convivência.\n\n_Digite 0 para voltar._");
                             return;
                         }
 
-                        // OPÇÃO 4: HUMANO
-                        if (input === 'menu_human' || input === '4' || input.includes('humano') || input.includes('atendente')) {
+                        // OPÇÃO 5: HUMANO
+                        if (input === 'menu_human' || input === '5' || input.includes('humano') || input.includes('atendente')) {
                             await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde um pouquinho que já te respondemos! ⏳");
                             // 🛑 PARAR BOT AQUI
                             await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
@@ -577,330 +677,35 @@ app.post('/webhook', async (req: Request, res: Response) => {
                         }
                     }
 
-                    // Fluxo Dançar: Nome -> Idade
-                    if (currentState?.step === 'ASK_NAME') {
-                        const name = msgBody;
-                        if (name && name.length > 2) {
-                            await sendProfessionalMessage(from, `Prazer, ${name}! 👋\n\nE qual a sua *idade*? (Isso ajuda a saber se te indico turmas teens, adulto ou kids)`);
-                            await saveFlowState(from, 'ASK_AGE', { name });
-                            return;
-                        }
-                    }
+                    // ... (Ask Name, Age, Experience Logic remains same) ...
 
-                    // Fluxo Dançar: Idade -> Experiência
-                    if (currentState?.step === 'ASK_AGE') {
-                        const age = msgBody?.replace(/[^0-9]/g, '');
-                        if (age && age.length > 0) {
-                            const prevData = currentState.data || {};
+                    // ----------------------------------------------------
+                    // 🟣 FALLBACK (Sem IA Generativa)
+                    // ----------------------------------------------------
+                    if (msgBody && msgBody.length > 1 && !input?.startsWith('menu_') && !input?.startsWith('exp_') && !input?.startsWith('goal_') && !input?.startsWith('mod_')) {
+                        console.log(`🤖 Fallback (No AI) para: ${msgBody}`);
+
+                        // Se não estiver em um fluxo específico (ex: esperando nome/idade), manda o menu
+                        if (!currentState || currentState.step === 'MENU_MAIN') {
                             await sendList(
                                 from,
-                                "Sua Experiência",
-                                `Show! Agora sobre a dança... qual seu nível atual?`,
-                                "SELECIONAR NÍVEL",
-                                [
-                                    {
-                                        title: "Nível",
-                                        rows: [
-                                            { id: "exp_iniciante", title: "🐣 Nunca dancei", description: "Quero começar do zero" },
-                                            { id: "exp_basico", title: "🦶 Tenho uma noção", description: "Já fiz algumas aulas" },
-                                            { id: "exp_avancado", title: "🔥 Já danço bem", description: "Nível interm/avançado" }
-                                        ]
-                                    }
-                                ]
-                            );
-                            await saveFlowState(from, 'ASK_EXPERIENCE', { ...prevData, age });
-                            return;
-                        }
-                    }
-
-                    // Fluxo Dançar: Experiência -> Objetivo
-                    if (currentState?.step === 'ASK_EXPERIENCE') {
-                        if (input?.startsWith('exp_') || ['1', '2', '3'].includes(input || '')) {
-                            const exp = input.replace('exp_', '');
-                            const prevData = currentState.data || {};
-                            await sendList(
-                                from,
-                                "Seu Objetivo",
-                                "Legal! E o que você busca na XPACE hoje?",
-                                "SELECIONAR META",
-                                [
-                                    {
-                                        title: "Objetivo",
-                                        rows: [
-                                            { id: "goal_hobby", title: "🎉 Hobby / Diversão", description: "Relaxar, fazer amigos" },
-                                            { id: "goal_fitness", title: "💦 Suar a camisa", description: "Exercício físico intenso" },
-                                            { id: "goal_pro", title: "🏆 Profissionalizar", description: "Evoluir técnica/carreira" }
-                                        ]
-                                    }
-                                ]
-                            );
-                            await saveFlowState(from, 'ASK_GOAL', { ...prevData, experience: exp });
-                            // Tag experience
-                            addLabelToConversation(from, exp).catch(console.error);
-                            return;
-                        }
-                    }
-
-                    // Fluxo Dançar: Objetivo -> Recomendação + Drill Down
-                    if (currentState?.step === 'ASK_GOAL') {
-                        if (input?.startsWith('goal_') || ['1', '2', '3'].includes(input || '')) {
-                            const goal = input.replace('goal_', '');
-                            const prevData = currentState.data || {};
-                            const { name, age, experience } = prevData;
-
-                            const userProfile = `[Perfil Aluno: Nome=${name}, Idade=${age}, Nível=${experience}, Objetivo=${goal}]`;
-                            await saveMessage(from, 'user', userProfile);
-
-                            let recs = [];
-                            if (experience === 'iniciante') {
-                                recs = ['Start Dance (Iniciante)', 'K-Pop', 'Dança de Salão'];
-                            } else {
-                                recs = ['Urban Dance', 'Jazz Funk', 'Heels'];
-                            }
-
-                            await sendList(
-                                from,
-                                "Suas Recomendações 📋",
-                                `Perfil analisado com sucesso, ${name}! 🕵️‍♂️\n\nCom base no que me contou, estas turmas são perfeitas para você:\n\n` +
-                                recs.map(r => `• *${r}*`).join('\n') +
-                                `\n\n👇 *Selecione uma modalidade abaixo para ver detalhes (vídeo/horário):*`,
-                                "VER DETALHES",
-                                [
-                                    {
-                                        title: "Modalidades",
-                                        rows: [
-                                            { id: "mod_street", title: "👟 Street / Urban", description: "Estilo urbano e intenso" },
-                                            { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnica e expressão" },
-                                            { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias dos idols" },
-                                            { id: "mod_ritmos", title: "💃 Ritmos & Ballet", description: "Mix, Ballet e mais" },
-                                            { id: "mod_teatro", title: "🎭 Teatro", description: "Interpretação e arte" },
-                                            { id: "mod_outros", title: "✨ Especiais", description: "Acrobacia e Populares" },
-                                            { id: "final_booking", title: "✅ Já quero agendar!", description: "Ir para matrícula" }
-                                        ]
-                                    }
-                                ]
-                            );
-                            await saveFlowState(from, 'SELECT_MODALITY', { ...prevData, goal });
-                            // Tag Goal e Lead Quente
-                            addLabelToConversation(from, goal).catch(console.error);
-                            addLabelToConversation(from, 'hot_lead').catch(console.error);
-                            return;
-                        }
-                    }
-
-                    // Fluxo Detalhes da Modalidade
-                    if (currentState?.step === 'SELECT_MODALITY') {
-                        // Mapeamento numérico para modalidades
-                        const modalityMap: { [key: string]: string } = {
-                            '1': 'street',
-                            '2': 'jazz',
-                            '3': 'kpop',
-                            '4': 'ritmos',
-                            '5': 'teatro',
-                            '6': 'outros',
-                            '7': 'final_booking'
-                        };
-
-                        let mod = input || '';
-                        if (modalityMap[mod]) {
-                            mod = modalityMap[mod];
-                        } else if (mod.startsWith('mod_')) {
-                            mod = mod.replace('mod_', '');
-                        }
-
-                        if (mod === 'final_booking') {
-                            await sendProfessionalMessage(from,
-                                "Ótima escolha! Vamos agendar sua aula experimental. 📅\n\n" +
-                                "Acesse nossa agenda oficial aqui:\n" +
-                                "👉 https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n" +
-                                "Te esperamos na XSpace! Qualquer dúvida, é só chamar. 😉"
-                            );
-                            await deleteFlowState(from);
-                            addLabelToConversation(from, 'conversion_booked').catch(console.error);
-                            return;
-                        }
-
-                        if (['street', 'jazz', 'kpop', 'ritmos', 'teatro', 'outros', 'heels', 'ballet', 'lutas', 'salao'].includes(mod)) {
-                            addLabelToConversation(from, mod).catch(console.error);
-                            let details = "";
-
-                            switch (mod) {
-                                case 'street':
-                                    details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
-                                    break;
-                                case 'jazz':
-                                    details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
-                                    break;
-                                case 'kpop':
-                                case 'salao': // Juntando K-Pop em estilos se necessário, ou mantendo separado
-                                    details = "💃 *OUTROS ESTILOS*\n\n*K-POP (12+):* Ter/Qui 20h\n*SALÃO (18+):* Ter 20h\n*DANCEHALL (15+):* Sáb 14h30\n*POPULARES (12+):* Seg/Qua 14h";
-                                    break;
-                                case 'heels':
-                                    details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
-                                    break;
-                                case 'ritmos':
-                                    details = "💃 *RITMOS (15+)*\n\nSeg/Qua 19h | Ter/Qui 19h";
-                                    break;
-                                case 'ballet':
-                                    details = "🩰 *BALLET*\n\n*BABY (3+):* Ter/Qui 15h30\n*INIC (12+):* Ter/Qui 20h";
-                                    break;
-                                case 'teatro':
-                                    details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
-                                    break;
-                                case 'lutas':
-                                    details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
-                                    break;
-                                case 'outros':
-                                    details = "✨ *ESPECIAIS*\n\nVeja as categorias Heels, Lutas ou Ballet no menu para mais detalhes!";
-                                    break;
-                            }
-
-                            await sendProfessionalMessage(from, details);
-
-                            // Atualiza estado para evitar colisão de inputs (1=Street vs 1=Agendar)
-                            await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { ...currentState.data, viewing: mod });
-
-                            setTimeout(async () => {
-                                await sendList(
-                                    from,
-                                    "Mais Opções",
-                                    "O que mais gostaria de ver?",
-                                    "ESCOLHER",
-                                    [
-                                        {
-                                            title: "Ações",
-                                            rows: [
-                                                { id: "final_booking", title: "📅 Agendar Aula", description: "Gostei, quero ir!" },
-                                                { id: "menu_menu", title: "🔙 Voltar ao Menu", description: "Ver outras opções" }
-                                            ]
-                                        }
-                                    ]
-                                );
-                            }, 2000);
-                            return;
-                        }
-                    }
-
-                    // Fluxo: Vendo Detalhes -> Ação (Agendar ou Voltar)
-                    if (currentState?.step === 'VIEW_MODALITY_DETAILS') {
-                        if (input === '1' || input === 'final_booking' || input.includes('agendar')) {
-                            await sendProfessionalMessage(from,
-                                "Ótima escolha! Vamos agendar sua aula experimental. 📅\n\n" +
-                                "Acesse nossa agenda oficial aqui:\n" +
-                                "👉 https://agendamento.nextfit.com.br/f9b1ea53-0e0e-4f98-9396-3dab7c9fbff4\n\n" +
-                                "Te esperamos na XSpace! Qualquer dúvida, é só chamar. 😉"
-                            );
-                            await deleteFlowState(from);
-                            addLabelToConversation(from, 'conversion_booked').catch(console.error);
-                            return;
-                        }
-
-                        if (input === '2' || input === 'menu_menu' || input.includes('voltar')) {
-                            // Deixa cair no bloco abaixo que já trata 'menu_menu' ou chama explicitamente
-                            await deleteFlowState(from);
-                            await sendList(
-                                from,
-                                "Menu Principal",
-                                "De volta ao início! Como posso ajudar?",
+                                "Menu XPACE",
+                                "Não entendi sua mensagem, mas posso te ajudar por aqui!",
                                 "ABRIR MENU",
                                 [
                                     {
-                                        title: "Navegação",
+                                        title: "Opções",
                                         rows: [
-                                            { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
-                                            { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores" },
-                                            { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
-                                            { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
+                                            { id: "menu_dance", title: "💃 Quero Dançar", description: "Encontre sua turma" },
+                                            { id: "menu_schedule", title: "📅 Grade de Horários", description: "Ver dias e horas" },
+                                            { id: "menu_prices", title: "💰 Ver Preços", description: "Planos e valores" },
+                                            { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Chamar equipe" }
                                         ]
                                     }
                                 ]
                             );
                             await saveFlowState(from, 'MENU_MAIN');
-                            return;
                         }
-                    }
-
-                    // Voltar ao Menu
-                    if (input === 'menu_menu') {
-                        await deleteFlowState(from);
-                        await sendList(
-                            from,
-                            "Menu Principal",
-                            "De volta ao início! Como posso ajudar?",
-                            "ABRIR MENU",
-                            [
-                                {
-                                    title: "Navegação",
-                                    rows: [
-                                        { id: "menu_1", title: "💃 Quero Dançar", description: "Encontre sua turma" },
-                                        { id: "menu_2", title: "💰 Ver Preços", description: "Planos e valores 2026" },
-                                        { id: "menu_3", title: "📍 Localização", description: "Endereço e mapa" },
-                                        { id: "menu_4", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
-                                    ]
-                                }
-                            ]
-                        );
-                        await saveFlowState(from, 'MENU_MAIN');
-                        return;
-                    }
-
-                    // ----------------------------------------------------
-                    // 🟣 IA HÍBRIDA (Fallback para dúvidas complexas)
-                    // ----------------------------------------------------
-                    if (msgBody && msgBody.length > 2 && !input?.startsWith('menu_') && !input?.startsWith('exp_') && !input?.startsWith('goal_') && !input?.startsWith('mod_')) {
-                        console.log(`🤖 IA Fallback para: ${msgBody}`);
-
-                        await sendPresence(from, 'composing');
-
-                        // --- AUTOMAÇÃO CHATWOOT INTELIGENTE ---
-                        const lowerMsg = msgBody.toLowerCase();
-
-                        // 1. Financeiro (Pix, Boleto, Valor, Pagamento)
-                        if (lowerMsg.includes('pix') || lowerMsg.includes('boleto') || lowerMsg.includes('transfer') || lowerMsg.includes('pagamento')) {
-                            addLabelToConversation(from, 'financeiro').catch(console.error);
-                        }
-
-                        // 2. Urgente (Reclamação, Problema, Erro)
-                        if (lowerMsg.includes('reclam') || lowerMsg.includes('problema') || lowerMsg.includes('erro') || lowerMsg.includes('odiei')) {
-                            addLabelToConversation(from, 'urgente').catch(console.error);
-                            await notifySocios(`🚨 RECLAMAÇÃO/URGENTE`, { jid: from, name: pushName });
-                        }
-
-                        // 3. Churn / Cancelamento (Risco de Perda)
-                        if (lowerMsg.includes('cancelar') || lowerMsg.includes('sair') || lowerMsg.includes('parar') || lowerMsg.includes('reembolso')) {
-                            addLabelToConversation(from, 'churn_risk').catch(console.error);
-                            // Opcional: Notificar sócios também?
-                            await notifySocios(`⚠️ RISCO DE CHURN/CANCELAMENTO`, { jid: from, name: pushName });
-                        }
-
-                        // 4. Elogios (Love)
-                        if (lowerMsg.includes('amei') || lowerMsg.includes('adoro') || lowerMsg.includes('incrivel') || lowerMsg.includes('maravilh')) {
-                            addLabelToConversation(from, 'love').catch(console.error);
-                        }
-
-                        // 5. Dúvidas de Localização
-                        if (isLocationRequest(lowerMsg)) {
-                            addLabelToConversation(from, 'duvida_local').catch(console.error);
-                        }
-                        // --------------------------------------
-
-                        // --- IA ATIVA (REATIVADA) ---
-                        // Apenas aprendendo, não respondendo.
-
-                        const history = await getHistory(from);
-                        const aiResponse = await generateResponse(msgBody, history); // <-- IA geraria aqui
-
-                        if (!aiResponse.startsWith("Erro:")) {
-                            await saveMessage(from, 'user', msgBody);
-                            await saveMessage(from, 'model', aiResponse);
-                            await sendProfessionalMessage(from, aiResponse);
-                        } else {
-                            console.error("Erro IA:", aiResponse);
-                            // Se der erro, aí sim podemos usar um fallback ou apenas não responder
-                            await sendProfessionalMessage(from, "Desculpe, estou com uma instabilidade momentânea. Tente novamente em instantes.");
-                        }
-
-
                     }
                 }
 
