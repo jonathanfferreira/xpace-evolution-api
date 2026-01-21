@@ -1,94 +1,65 @@
 import { generateResponse, XPACE_CONTEXT } from './ai';
-import axios from 'axios';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as memory from './memory';
 
-// Mock do Axios para interceptar chamadas HTTP e não gastar cota da API real
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+// Mock do SDK do Google
+jest.mock('@google/generative-ai');
+// Mock do módulo de memória
+jest.mock('./memory');
 
-describe('Validação do Fluxo de Vendas (X-Bot)', () => {
+describe('AI Service (X-Bot Hybrid)', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        process.env.GEMINI_API_KEY = 'test_api_key';
+        process.env.GEMINI_API_KEY = 'test_key';
     });
 
-    /**
-     * Teste 1: Validação Estática do Prompt (Regras de Negócio)
-     * Garante que as instruções cruciais não foram removidas ou alteradas acidentalmente no código.
-     */
-    it('Deve conter a instrução obrigatória de perguntar a experiência antes da grade', () => {
-        // Verifica se a "Regra de Ouro" está presente no texto do prompt
-        expect(XPACE_CONTEXT).toContain('pergunte a experiência dele antes de mandar a grade');
-
-        // Verifica se as etapas do fluxo (State Machine) estão definidas
-        expect(XPACE_CONTEXT).toContain('Diagnóstico');
-        expect(XPACE_CONTEXT).toContain('Recomendação');
+    it('Deve conter as tags e regras híbridas no contexto (Prompt)', () => {
+        expect(XPACE_CONTEXT).toContain('[SHOW_MENU]');
+        expect(XPACE_CONTEXT).toContain('[SHOW_PRICES]');
+        expect(XPACE_CONTEXT).toContain('[SHOW_SCHEDULE]');
+        expect(XPACE_CONTEXT).toContain('REGRAS DE RESPOSTA HÍBRIDA');
     });
 
-    /**
-     * Teste 2: Validação do Envio de Contexto (System Instruction)
-     * Garante que o "cérebro" (prompt com as regras) está sendo enviado corretamente para a API.
-     */
-    it('Deve enviar o XPACE_CONTEXT como system_instruction para a API', async () => {
-        // Configura resposta simulada
-        mockedAxios.post.mockResolvedValue({
-            data: {
-                candidates: [{ content: { parts: [{ text: 'Resposta da IA' }] } }]
+    it('Deve chamar o Gemini e retornar o texto gerado', async () => {
+        // Setup Mocks
+        (memory.getHistory as jest.Mock).mockResolvedValue([]);
+        (memory.getLearnedContext as jest.Mock).mockResolvedValue("");
+
+        const mockResponse = {
+            response: {
+                text: () => "Olá! Sou o X-Bot. [SHOW_MENU]"
             }
-        });
+        };
 
-        await generateResponse('Olá');
+        const mockChat = {
+            sendMessage: jest.fn().mockResolvedValue(mockResponse)
+        };
 
-        // Verifica os argumentos da chamada POST
-        const callArgs = mockedAxios.post.mock.calls[0];
-        const requestBody = callArgs[1];
+        const mockModel = {
+            startChat: jest.fn().mockReturnValue(mockChat)
+        };
 
-        expect(requestBody.system_instruction).toBeDefined();
-        expect(requestBody.system_instruction.parts[0].text).toBe(XPACE_CONTEXT);
+        (GoogleGenerativeAI as jest.Mock).mockImplementation(() => ({
+            getGenerativeModel: jest.fn().mockReturnValue(mockModel)
+        }));
+
+        // Execução
+        const response = await generateResponse('user_123', 'Oi');
+
+        // Verificações
+        expect(response).toBe("Olá! Sou o X-Bot. [SHOW_MENU]");
+        expect(memory.getHistory).toHaveBeenCalledWith('user_123');
+        expect(mockModel.startChat).toHaveBeenCalled();
+        expect(mockChat.sendMessage).toHaveBeenCalledWith('Oi');
+        expect(memory.saveMessage).toHaveBeenCalledWith('user_123', 'model', "Olá! Sou o X-Bot. [SHOW_MENU]");
     });
 
-    /**
-     * Teste 3: Validação de Memória (Histórico)
-     * O fluxo depende de saber o que foi dito antes. Este teste garante que o histórico é enviado.
-     */
-    it('Deve incluir o histórico da conversa para manter o contexto do fluxo', async () => {
-        const history = [
-            { role: 'user', parts: [{ text: 'Quais as aulas?' }] },
-            { role: 'model', parts: [{ text: 'Você já dança ou é iniciante?' }] } // Bot seguindo o fluxo
-        ];
-        const userPrompt = 'Sou iniciante';
+    it('Deve lidar com erros graciosamente', async () => {
+        (memory.getHistory as jest.Mock).mockRejectedValue(new Error("DB Error"));
 
-        mockedAxios.post.mockResolvedValue({
-            data: {
-                candidates: [{ content: { parts: [{ text: 'Recomendo a turma de iniciantes.' }] } }]
-            }
-        });
+        const response = await generateResponse('user_error', 'Teste');
 
-        await generateResponse(userPrompt, history);
-
-        const requestBody = mockedAxios.post.mock.calls[0][1];
-        const sentContents = requestBody.contents;
-
-        // Deve ter 3 mensagens: 2 do histórico + 1 atual
-        expect(sentContents).toHaveLength(3);
-        expect(sentContents[0].parts[0].text).toBe('Quais as aulas?');
-        expect(sentContents[1].parts[0].text).toBe('Você já dança ou é iniciante?');
-        expect(sentContents[2].parts[0].text).toBe('Sou iniciante');
-    });
-
-    /**
-     * Teste 4: Validação de Parâmetros de Geração
-     * Uma temperatura baixa (0.4) é crucial para que o bot siga regras rígidas (State Machine)
-     * em vez de ser "criativo" e pular etapas.
-     */
-    it('Deve usar temperatura baixa (0.4) para garantir aderência ao script de vendas', async () => {
-        mockedAxios.post.mockResolvedValue({
-            data: { candidates: [{ content: { parts: [{ text: 'Ok' }] } }] }
-        });
-
-        await generateResponse('Teste');
-
-        const requestBody = mockedAxios.post.mock.calls[0][1];
-        expect(requestBody.generationConfig.temperature).toBe(0.4);
+        expect(response).toContain("Ops, deu um tilt");
     });
 });

@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { getHistory, saveMessage, clearHistory, getFlowState, saveFlowState, deleteFlowState, saveLearnedResponse } from './services/memory';
-// import { generateResponse, XPACE_CONTEXT } from './services/ai'; // AI Agent Disabled
+import { generateResponse } from './services/ai'; // AI Agent Enabled
 import { sendMessage, sendProfessionalMessage, sendList, sendMedia, sendPresence, sendReaction, sendLocation } from './services/whatsapp';
 import { addLabelToConversation } from './services/chatwoot';
 
@@ -388,15 +388,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             // Para evitar duplicar código, poderíamos refatorar, mas vamos manter simples por agora.
 
                             let details = "";
-                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
-                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
+                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (5+):* Seg/Qua 08h, 14h30, 19h\n*TEENS/JUNIOR (12+):* Seg/Qua 19h | Ter/Qui 09h, 14h30\n*INICIANTE (12+):* Ter/Qui 20h\n*SENIOR/ADULTO (16+):* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
+                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*JAZZ (18+):* Seg/Qua 20h (Inic) | Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
                             if (targetModality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nTer/Qui 20h (XTAGE)";
-                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
-                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS (15+):* Seg/Qua 19h | Ter/Qui 19h\n*BALLET:* Consulte grade.";
-                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
-                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
-                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*DANCEHALL (15+):* Sáb 14h30";
-                            if (targetModality === 'salao') details = "💃 *SALÃO (18+)*\n\nTer 20h\n*DANCEHALL/SALÃO:* Sáb 14h30";
+                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 17h, 18h, 19h | Sáb 11h, 12h\n*CIA:* Sáb 14h";
+                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS/FIT (15+):* Seg/Qua 08h, 19h | Ter/Qui 19h\n*BALLET (12+):* Ter/Qui 21h";
+                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg 09h | Qua 09h30\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
+                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Seg/Qua 20h | Ter/Qui 19h, 20h\n*JIU JITSU:* Seg/Qua/Sex 19h, 20h";
+                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*CIA (15+):* Sáb 14h30";
+                            if (targetModality === 'salao') details = "💃 *SALÃO & SAMBA (18+)*\n\n*SALÃO:* Ter 20h\n*SAMBA DE GAFIEIRA:* Qui 20h\n*DANCEHALL/SALÃO (15+):* Sáb 14h30";
 
                             await sendProfessionalMessage(from, details);
                             await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
@@ -445,15 +445,15 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             // Simula seleção de menu e detalhes
                             let details = "";
 
-                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (6+):* Seg/Qua 08h, 14h30, 19h\n*TEENS (12+):* Ter/Qui 09h, 14h30 | Seg/Qua 19h\n*ADULTO:* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
-                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*TÉCNICO 12+:* Seg/Qua 20h\n*TÉCNICO 18+:* Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
+                            if (targetModality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (5+):* Seg/Qua 08h, 14h30, 19h\n*TEENS/JUNIOR (12+):* Seg/Qua 19h | Ter/Qui 09h, 14h30\n*INICIANTE (12+):* Ter/Qui 20h\n*SENIOR/ADULTO (16+):* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
+                            if (targetModality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*JAZZ (18+):* Seg/Qua 20h (Inic) | Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
                             if (targetModality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nTer/Qui 20h (XTAGE)";
-                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 19h | Sáb 11h\n*CIA:* Sáb 14h";
-                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS (15+):* Seg/Qua 19h | Ter/Qui 19h\n*BALLET:* Consulte grade.";
-                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg/Qua 09h\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
-                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 19h\n*JIU JITSU (6+):* Sex 19h";
-                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*DANCEHALL (15+):* Sáb 14h30";
-                            if (targetModality === 'salao') details = "💃 *SALÃO (18+)*\n\nTer 20h\n*DANCEHALL/SALÃO:* Sáb 14h30";
+                            if (targetModality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 17h, 18h, 19h | Sáb 11h, 12h\n*CIA:* Sáb 14h";
+                            if (targetModality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS/FIT (15+):* Seg/Qua 08h, 19h | Ter/Qui 19h\n*BALLET (12+):* Ter/Qui 21h";
+                            if (targetModality === 'teatro') details = "🎭 *TEATRO & ACRO*\n\n*TEATRO (12+):* Seg 09h | Qua 09h30\n*TEATRO (15+):* Seg/Qua 15h30\n*ACRO (12+):* Seg/Qua 20h";
+                            if (targetModality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Seg/Qua 20h | Ter/Qui 19h, 20h\n*JIU JITSU:* Seg/Qua/Sex 19h, 20h";
+                            if (targetModality === 'populares') details = "🇧🇷 *POPULARES*\n\nSeg/Qua 14h\n*CIA (15+):* Sáb 14h30";
+                            if (targetModality === 'salao') details = "💃 *SALÃO & SAMBA (18+)*\n\n*SALÃO:* Ter 20h\n*SAMBA DE GAFIEIRA:* Qui 20h\n*DANCEHALL/SALÃO (15+):* Sáb 14h30";
 
                             await sendProfessionalMessage(from, details);
                             await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: targetModality });
@@ -682,29 +682,92 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     // ----------------------------------------------------
                     // 🟣 FALLBACK (Sem IA Generativa)
                     // ----------------------------------------------------
+                    // ----------------------------------------------------
+                    // 🟣 FALLBACK (IA GENERATIVA HÍBRIDA)
+                    // ----------------------------------------------------
                     if (msgBody && msgBody.length > 1 && !input?.startsWith('menu_') && !input?.startsWith('exp_') && !input?.startsWith('goal_') && !input?.startsWith('mod_')) {
-                        console.log(`🤖 Fallback (No AI) para: ${msgBody}`);
+                        console.log(`🤖 [AI] Processing message: "${msgBody}"`);
 
-                        // Se não estiver em um fluxo específico (ex: esperando nome/idade), manda o menu
+                        // Se não estiver em um fluxo específico (ex: esperando nome/idade), manda pra IA
                         if (!currentState || currentState.step === 'MENU_MAIN') {
-                            await sendList(
-                                from,
-                                "Menu XPACE",
-                                "Não entendi sua mensagem, mas posso te ajudar por aqui!",
-                                "ABRIR MENU",
-                                [
-                                    {
-                                        title: "Opções",
-                                        rows: [
-                                            { id: "menu_dance", title: "💃 Quero Dançar", description: "Encontre sua turma" },
-                                            { id: "menu_schedule", title: "📅 Grade de Horários", description: "Ver dias e horas" },
-                                            { id: "menu_prices", title: "💰 Ver Preços", description: "Planos e valores" },
-                                            { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Chamar equipe" }
-                                        ]
-                                    }
-                                ]
-                            );
-                            await saveFlowState(from, 'MENU_MAIN');
+
+                            // Chama o Gemini
+                            const aiResponse = await generateResponse(from, msgBody);
+                            console.log(`🤖 [AI] Response: "${aiResponse}"`);
+
+                            // 1. Verifica TAGS ESPECIAIS na resposta
+                            let finalMessage = aiResponse; // Mensagem limpa para enviar
+                            let triggers: string[] = [];
+
+                            if (aiResponse.includes('[SHOW_MENU]')) {
+                                triggers.push('MENU');
+                                finalMessage = finalMessage.replace('[SHOW_MENU]', '');
+                            }
+                            if (aiResponse.includes('[SHOW_PRICES]')) {
+                                triggers.push('PRICES');
+                                finalMessage = finalMessage.replace('[SHOW_PRICES]', '');
+                            }
+                            if (aiResponse.includes('[SHOW_SCHEDULE]')) {
+                                triggers.push('SCHEDULE');
+                                finalMessage = finalMessage.replace('[SHOW_SCHEDULE]', '');
+                            }
+                            if (aiResponse.includes('[SHOW_LOCATION]')) {
+                                triggers.push('LOCATION');
+                                finalMessage = finalMessage.replace('[SHOW_LOCATION]', '');
+                            }
+                            if (aiResponse.includes('[HANDOFF]')) {
+                                triggers.push('HANDOFF');
+                                finalMessage = finalMessage.replace('[HANDOFF]', '');
+                            }
+
+                            // Envia a resposta de texto da IA (limpa)
+                            if (finalMessage.trim().length > 0) {
+                                await sendProfessionalMessage(from, finalMessage.trim());
+                            }
+
+                            // Executa os Gatilhos Visuais
+                            for (const trigger of triggers) {
+                                await new Promise(r => setTimeout(r, 1000)); // Delay para não atropelar
+
+                                if (trigger === 'MENU') {
+                                    await sendList(from, "Menu XPACE", "Aqui estão as opções que você pode precisar:", "ABRIR MENU", [
+                                        { title: "Navegação", rows: [{ id: "menu_dance", title: "💃 Quero Dançar", description: "Ver turmas" }, { id: "menu_schedule", title: "📅 Grade de Horários", description: "Ver dias e horas" }, { id: "menu_prices", title: "💰 Ver Preços", description: "Valores" }, { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Ajuda" }] }
+                                    ]);
+                                    await saveFlowState(from, 'MENU_MAIN');
+                                }
+
+                                if (trigger === 'PRICES') {
+                                    await sendProfessionalMessage(from,
+                                        `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
+                                        `💎 *PASSE LIVRE:* R$ 350/mês (Acesso Total)\n` +
+                                        `*2x NA SEMANA:*\n` +
+                                        `💎 Anual: R$ 165/mês\n` +
+                                        `💳 Semestral: R$ 195/mês\n` +
+                                        `🎟️ Mensal: R$ 215/mês\n\n` +
+                                        `*1x NA SEMANA:*\n` +
+                                        `💎 Anual: R$ 100/mês\n` +
+                                        `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`
+                                    );
+                                }
+
+                                if (trigger === 'SCHEDULE') {
+                                    await sendList(from, "Grade de Horários 📅", "Toque em uma modalidade:", "VER GRADE", [
+                                        { title: "Modalidades", rows: [{ id: "mod_street", title: "👟 Street / Urban", description: "Kids, Teens, Adulto" }, { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnico, Funk" }, { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias" }, { id: "mod_ritmos", title: "💃 Ritmos", description: "Dança de Salão, Fit" }, { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet" }] }
+                                    ]);
+                                    await saveFlowState(from, 'SELECT_MODALITY');
+                                }
+
+                                if (trigger === 'LOCATION') {
+                                    await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
+                                }
+
+                                if (trigger === 'HANDOFF') {
+                                    await notifySocios(`🚨 IA SOLICITOU AJUDA HUMANA: ${pushName}`, { jid: from, name: pushName });
+                                    addLabelToConversation(from, 'human_handoff').catch(console.error);
+                                    // Salva estado para não ficar em loop
+                                    await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
+                                }
+                            }
                         }
                     }
                 }
