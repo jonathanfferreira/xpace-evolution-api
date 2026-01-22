@@ -648,7 +648,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     // 🟢 1. MENU PRINCIPAL (Gatilhos: Oi, Menu, 0)
 
                     // ----------------------------------------------------
-                    if (isGreeting(msgBody) || msgBody?.trim() === '0') {
+                    if ((isGreeting(msgBody) && msgBody?.length < 15) || msgBody?.trim() === '0') {
                         await deleteFlowState(from); // Reinicia fluxo
 
                         await sendReaction(from, messageKey, '👋');
