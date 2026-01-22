@@ -32,13 +32,33 @@ function isLocationRequest(text: string): boolean {
     return keywords.some(keyword => text.toLowerCase().includes(keyword));
 }
 
+// 🧠 SMART NAME: Valida se o nome do WhatsApp é "chamável" ou se é trash (emoji/nick)
+function getSmartName(rawName: string | undefined): string | null {
+    if (!rawName) return null;
+
+    const cleanName = rawName.split(' ')[0].replace(/[^a-zA-ZÀ-ÿ]/g, ''); // Remove emojis/símbolos
+
+    // Regras de validação
+    if (cleanName.length < 2) return null; // Muito curto (Ex: "A", "Jo")
+    if (cleanName.length > 15) return null; // Muito longo (provavelmente nick)
+    if (/^[a-z]+$/.test(cleanName)) {
+        // Se for tudo minúsculo, capitaliza a primeira letra
+        return cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    }
+    return cleanName;
+}
+
 // Funções de Notificação para Sócios
 async function notifySocios(intent: string, userInfo: any) {
     let text = "";
+    // Gera o link do WhatsApp (wa.me)
+    const phone = userInfo.jid.replace('@s.whatsapp.net', '');
+    const waLink = `https://wa.me/${phone}`;
+
     if (intent.startsWith("👁️")) {
-        text = `🚨 *ALERTA DE LEITURA (XPACE)*\n\n${intent}\nAluno: ${userInfo.name || userInfo.jid}`;
+        text = `🚨 *ALERTA DE LEITURA (XPACE)*\n\n${intent}\nAluno: ${userInfo.name || "Desconhecido"}\nLink: ${waLink}`;
     } else {
-        text = `🚨 *ALERTA XPACE-BOT*\n\nUm aluno demonstrou forte interesse em: *${intent}*\nDe: ${userInfo.name || userInfo.jid}\n\nFavor entrar em contato!`;
+        text = `🚨 *ALERTA XPACE-BOT*\n\nUm aluno demonstrou forte interesse em: *${intent}*\nDe: ${userInfo.name || "Desconhecido"}\nLink: ${waLink}\n\nFavor entrar em contato!`;
     }
 
     // Notifica todos (ou apenas Alceu/Ruan/Jhonney como configurado)
@@ -131,6 +151,45 @@ setInterval(() => {
     }
 }, 3600000);
 
+// PROACTIVE FOLLOW-UP: Agendamento de checagem
+// Armazena quem recebeu o link e quando. Se não interagir, mandamos msg.
+const followUpQueue = new Map<string, NodeJS.Timeout>();
+
+function scheduleBookingFollowUp(jid: string, pushName: string) {
+    // Se já tiver um agendado, limpa (renova)
+    if (followUpQueue.has(jid)) {
+        clearTimeout(followUpQueue.get(jid)!);
+    }
+
+    console.log(`[FOLLOW-UP] Agendando checagem para ${jid} em 15min...`);
+
+    const timer = setTimeout(async () => {
+        try {
+            // Verifica se o usuário mandou msg recente (opcional, por enquanto manda direto)
+            console.log(`[FOLLOW-UP] Executando checagem para ${jid}`);
+
+            await sendProfessionalMessage(jid,
+                `Opa, ${pushName}! 👋\n\nPassando só pra saber se você conseguiu acessar o link de agendamento ou se ficou com alguma dúvida?\n\nQualquer coisa, estou por aqui! 😉`
+            );
+
+            followUpQueue.delete(jid);
+        } catch (e) {
+            console.error('Erro no follow-up:', e);
+        }
+    }, 15 * 60 * 1000); // 15 Minutos
+
+    followUpQueue.set(jid, timer);
+}
+
+// Helper para cancelar follow-up se o usuário falar algo (opcional, mas recomendado)
+function cancelFollowUp(jid: string) {
+    if (followUpQueue.has(jid)) {
+        console.log(`[FOLLOW-UP] Cancelado para ${jid} (interação detectada)`);
+        clearTimeout(followUpQueue.get(jid)!);
+        followUpQueue.delete(jid);
+    }
+}
+
 // Webhook Reception (Evolution API)
 app.post('/webhook', async (req: Request, res: Response) => {
     try {
@@ -156,7 +215,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
                 // Se o usuário estiver nessas etapas CRÍTICAS, notificamos!
                 if (currentState) {
                     const step = currentState.step;
-                    const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
+                    const pushName = getSmartName(body.instanceData?.user) || "Aluno";
 
                     if (step === 'VIEW_MODALITY_DETAILS' || step === 'SELECT_MODALITY') {
                         console.log(`[READ RECEIPT] ${from} visualizou Detalhes/Agendamento!`);
@@ -252,7 +311,11 @@ app.post('/webhook', async (req: Request, res: Response) => {
         // Adiciona o processamento à fila do usuário
         const processMessage = async () => {
             try {
-                const pushName = (body.instanceData?.user || "Aluno").split(' ')[0];
+                // 🧠 SMART NAME DETECTION
+                const rawPushName = body.instanceData?.user || data.pushName;
+                const smartName = getSmartName(rawPushName);
+                const pushName = smartName || "Aluno"; // Fallback apenas para logs
+
                 const messageKey = data.key;
 
                 // 1. EXTRAÇÃO DA MENSAGEM
@@ -491,6 +554,17 @@ app.post('/webhook', async (req: Request, res: Response) => {
                     }
 
                     // ----------------------------------------------------
+                    // 🔢 SAFETY: Garantir que 1-5 sejam tratados como escolha (Hotfix)
+                    // ----------------------------------------------------
+                    if (['1', '2', '3', '4', '5', '6'].includes(input)) {
+                        const stateCheck = await getFlowState(from);
+                        if (!stateCheck) {
+                            console.log(`[SAFETY] Input numérico '${input}' sem estado. Restaurando para MENU_MAIN.`);
+                            await saveFlowState(from, 'MENU_MAIN');
+                        }
+                    }
+
+                    // ----------------------------------------------------
                     // 🧠 INTELIGÊNCIA RÁPIDA (Palavras-Chave Diretas)
                     // ----------------------------------------------------
                     // Se o usuário mandar algo específico, respondemos direto, sem Menu.
@@ -499,6 +573,13 @@ app.post('/webhook', async (req: Request, res: Response) => {
 
                         // 1. Grade / Horários / Aulas
                         if (lowerMsg.includes('grade') || lowerMsg.includes('horario') || lowerMsg.includes('aulas') || lowerMsg.includes('turmas')) {
+
+                            // 🎩 POLITENESS LAYER (Educação)
+                            if (isGreeting(msgBody)) {
+                                await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nVi que você quer saber nossos horários. É pra já!`);
+                                await new Promise(r => setTimeout(r, 1000)); // Delay natural
+                            }
+
                             await sendList(
                                 from,
                                 "Grade de Horários 📅",
@@ -637,6 +718,27 @@ app.post('/webhook', async (req: Request, res: Response) => {
                             await saveFlowState(from, 'SELECT_MODALITY'); // Jump directly to modality selection
                             return;
                         }
+                        // OPÇÃO: OUTROS (Ver Todas)
+                        if (input === 'mod_outros' || input === '6' || input.includes('todas') || input.includes('outras')) {
+                            await sendProfessionalMessage(from,
+                                "✨ *OUTRAS MODALIDADES XPACE* ✨\n\n" +
+                                "Além das principais, temos estas aulas incríveis:\n\n" +
+                                "👠 *HEELS (15+)*\nQui 17h, 18h, 19h | Sáb 11h, 12h\n*CIA:* Sáb 14h\n\n" +
+                                "🥊 *LUTAS*\n*MUAY THAI (12+):* Seg/Qua 20h | Ter/Qui 19h, 20h\n*JIU JITSU:* Seg/Qua/Sex 19h, 20h\n\n" +
+                                "🩰 *BALLET (12+)*\nTer/Qui 21h\n\n" +
+                                "🇧🇷 *POPULARES*\nSeg/Qua 14h | Sáb 14h30 (Cia)\n\n" +
+                                "💃 *DANÇA DE SALÃO*\nTer 20h\n"
+                            );
+
+                            setTimeout(async () => {
+                                await sendList(from, "Próximos Passos", "Gostou de alguma?", "O QUE FAZER?", [
+                                    { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
+                                ]);
+                            }, 2000);
+
+                            await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: 'outros' });
+                            return;
+                        }
 
                         // OPÇÃO 3: VER PREÇOS
                         if (input === 'menu_prices' || input === '3' || input.includes('preço') || input.includes('valor')) {
@@ -656,6 +758,8 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                 `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos\n\n` +
                                 `_Digite 0 para voltar._`
                             );
+                            // Agenda Follow-up
+                            scheduleBookingFollowUp(from, pushName);
                             return;
                         }
 
@@ -719,6 +823,10 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                 triggers.push('HANDOFF');
                                 finalMessage = finalMessage.replace('[HANDOFF]', '');
                             }
+                            if (aiResponse.includes('[UNKNOWN]')) {
+                                triggers.push('UNKNOWN');
+                                finalMessage = finalMessage.replace('[UNKNOWN]', '');
+                            }
 
                             // Envia a resposta de texto da IA (limpa)
                             if (finalMessage.trim().length > 0) {
@@ -748,6 +856,8 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                         `💎 Anual: R$ 100/mês\n` +
                                         `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`
                                     );
+                                    // Agenda Follow-up
+                                    scheduleBookingFollowUp(from, pushName);
                                 }
 
                                 if (trigger === 'SCHEDULE') {
@@ -766,6 +876,14 @@ app.post('/webhook', async (req: Request, res: Response) => {
                                     addLabelToConversation(from, 'human_handoff').catch(console.error);
                                     // Salva estado para não ficar em loop
                                     await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
+                                }
+
+                                if (trigger === 'UNKNOWN') {
+                                    await sendProfessionalMessage(from, "Essa informação específica eu prefiro confirmar com nossa equipe humana para não te passar nada errado! 😅\n\nPosso chamar alguém para te ajudar?");
+                                    await new Promise(r => setTimeout(r, 1500));
+                                    await sendList(from, "Ajuda Humana", "Deseja falar com atendente?", "OPÇÕES", [
+                                        { title: "Atendimento", rows: [{ id: "menu_human", title: "🙋‍♂️ Sim, chamar humano", description: "Falar com equipe" }, { id: "menu_menu", title: "🔙 Não, voltar ao menu", description: "Ver outras opções" }] }
+                                    ]);
                                 }
                             }
                         }
