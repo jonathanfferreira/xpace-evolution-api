@@ -1,10 +1,8 @@
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { config } from '../config';
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_CONNECTION_URI,
+    connectionString: config.database.uri,
     ssl: {
         rejectUnauthorized: false
     }
@@ -50,13 +48,12 @@ export async function ensureDbInitialized() {
 
         console.log('✅ Database initialized (Memory + Flow State)');
     } catch (error) {
-        console.error('Error initializing database:', error);
+        console.error('⚠️ Warning: Database initialization failed. Features dependent on persistence will be disabled.', error);
     }
 }
 
-// Auto-run for server context (optional, but keep it if server relies on side-effect)
-// Better to call it explicitly in server.ts, but for backward compat:
-ensureDbInitialized();
+// Initial connection check
+pool.connect().catch(err => console.error("⚠️ Warning: Initial DB connection failed. Bot works in stateless mode.", err.message));
 
 export async function getHistory(userId: string): Promise<Message[]> {
     try {
@@ -77,7 +74,7 @@ export async function getHistory(userId: string): Promise<Message[]> {
             parts: [{ text: row.content }]
         }));
     } catch (error) {
-        console.error('Error getting history:', error);
+        console.error('Error getting history (Stateless fallback active):', error);
         return [];
     }
 }

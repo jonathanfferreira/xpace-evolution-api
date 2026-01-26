@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+import { config } from '../config';
 
 
 // Função Utilitária para Humanização (Digitando...)
@@ -21,13 +21,11 @@ export async function sendProfessionalMessage(to: string, text: string) {
 }
 
 export async function sendMessage(to: string, text: string) {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    const { apiKey, serverUrl, instance } = config.evolutionApi;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendText/${instanceName}`,
+            `${serverUrl}/message/sendText/${instance}`,
             {
                 number: to,
                 text: text,
@@ -92,13 +90,11 @@ export async function sendList(to: string, title: string, text: string, buttonTe
 }
 
 export async function sendMedia(to: string, url: string, type: 'image' | 'video' | 'document' | 'audio', caption: string = "") {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    const { apiKey, serverUrl, instance } = config.evolutionApi;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendMedia/${instanceName}`,
+            `${serverUrl}/message/sendMedia/${instance}`,
             {
                 number: to,
                 media: url,
@@ -120,13 +116,11 @@ export async function sendMedia(to: string, url: string, type: 'image' | 'video'
 }
 
 export async function sendPresence(to: string, presence: 'composing' | 'recording' | 'paused') {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    const { apiKey, serverUrl, instance } = config.evolutionApi;
 
     try {
         await axios.post(
-            `${serverUrl}/chat/sendPresence/${instanceName}`,
+            `${serverUrl}/chat/sendPresence/${instance}`,
             {
                 number: to,
                 presence: presence,
@@ -145,13 +139,11 @@ export async function sendPresence(to: string, presence: 'composing' | 'recordin
 }
 
 export async function sendLocation(to: string, lat: number, lon: number, name: string, address: string) {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    const { apiKey, serverUrl, instance } = config.evolutionApi;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendLocation/${instanceName}`,
+            `${serverUrl}/message/sendLocation/${instance}`,
             {
                 number: to,
                 latitude: lat,
@@ -173,13 +165,11 @@ export async function sendLocation(to: string, lat: number, lon: number, name: s
 }
 
 export async function sendReaction(to: string, messageKey: any, emoji: string) {
-    const apiKey = process.env.AUTHENTICATION_API_KEY || 'xpace_secure_key_2025';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
-    const instanceName = 'XPACE';
+    const { apiKey, serverUrl, instance } = config.evolutionApi;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendReaction/${instanceName}`,
+            `${serverUrl}/message/sendReaction/${instance}`,
             {
                 number: to,
                 reaction: emoji,

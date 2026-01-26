@@ -1,13 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
+import { config } from '../config';
 import { getHistory, getLearnedContext, saveMessage } from './memory';
 
-dotenv.config();
-
 // Configuração do Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const genAI = new GoogleGenerativeAI(config.gemini.apiKey || '');
 // Usando o modelo mais recente e eficiente
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: config.gemini.model });
 
 // Contexto do Sistema (Persona e Regras)
 export const XPACE_CONTEXT = `
@@ -67,9 +65,15 @@ export async function generateResponse(userId: string, userMessage: string): Pro
             parts: h.parts // [{ text: '...' }]
         }));
 
+        console.log("DEBUG: Chat History Length:", chatHistory.length);
+        // console.log("DEBUG: Payload:", JSON.stringify({ history: chatHistory, txt: userMessage }));
+
         const chat = model.startChat({
             history: chatHistory,
-            systemInstruction: XPACE_CONTEXT + learnedContext
+            systemInstruction: {
+                role: 'system',
+                parts: [{ text: XPACE_CONTEXT + learnedContext }]
+            }
         });
 
         // 3. Enviar mensagem
@@ -86,7 +90,9 @@ export async function generateResponse(userId: string, userMessage: string): Pro
         return responseText;
 
     } catch (error) {
-        console.error("❌ [AI] Error generating response:", error);
+        const errorMsg = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+        console.error("❌ [AI] Error generating response:", errorMsg);
+        require('fs').writeFileSync('error_log.txt', errorMsg);
         return "Ops, deu um tilt aqui nos meus circuitos! 😵 Mas não se preocupe, digite 'Menu' que eu te mostro as opções manuais.";
     }
 }
