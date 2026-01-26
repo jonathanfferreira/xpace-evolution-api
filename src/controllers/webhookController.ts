@@ -176,11 +176,25 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 const handledSite = await handleSiteLeadFallback(msgBody, from, pushName);
                 if (handledSite) return;
 
+                // **PRIORITY 1: CHECK ACTIVE FLOW STATE**
+                // Se o usuário já está em um fluxo (ex: respondendo nome), isso processa primeiro.
+                if (currentState) {
+                    const handledQuiz = await handleQuizResponse(msgBody, from, currentState);
+                    if (handledQuiz) return;
+
+                    const handledMenu = await handleMenuSelection(input, from, pushName, currentState);
+                    if (handledMenu) return;
+                }
+
                 // 5. SAFETY CHECK (Input numérico sem estado)
                 if (['1', '2', '3', '4', '5', '6'].includes(input)) {
                     if (!currentState) {
                         await saveFlowState(from, 'MENU_MAIN');
-                        currentState = { step: 'MENU_MAIN', data: {} }; // Force local update with correct type
+                        currentState = { step: 'MENU_MAIN', data: {} }; // Force local update
+
+                        // Retry menu selection with new state
+                        const handledMenuRetry = await handleMenuSelection(input, from, pushName, currentState);
+                        if (handledMenuRetry) return;
                     }
                 }
 
@@ -189,9 +203,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 if (handledKeywords) return;
 
                 // 7. MENU PRINCIPAL (Gatilhos)
-                if (isGreeting(msgBody, pushName) || msgBody?.trim() === '0') { // isGreeting doesn't take pushName, fixing import usage below
-                    // Actually isGreeting signature was (text: string): boolean
-                    // I need to correct duplication of pushName usage if I call sendMainMenu inside here
+                if (isGreeting(msgBody, pushName) || msgBody?.trim() === '0') {
                     await deleteFlowState(from);
                     await sendReaction(from, messageKey, '👋');
                     await sendMainMenu(from, pushName);
@@ -203,13 +215,6 @@ async function handleMessageUpsert(req: Request, res: Response) {
                     const greetings = ['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'menu', 'iniciar', 'start', 'começar'];
                     return greetings.some(greeting => text.toLowerCase().includes(greeting));
                 }
-
-                // 8. FLOW STATE HANDLING
-                const handledMenu = await handleMenuSelection(input, from, pushName, currentState);
-                if (handledMenu) return;
-
-                const handledQuiz = await handleQuizResponse(msgBody, from, currentState);
-                if (handledQuiz) return;
 
 
                 // 9. AI FALLBACK
