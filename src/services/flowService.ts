@@ -12,13 +12,14 @@ const SOCIOS = {
 // HELPER: Schedule Booking Follow-up
 const followUpQueue = new Map<string, NodeJS.Timeout>();
 
-export function scheduleBookingFollowUp(jid: string, pushName: string) {
+export function scheduleBookingFollowUp(jid: string, pushName: string, instance?: string) {
     if (followUpQueue.has(jid)) clearTimeout(followUpQueue.get(jid)!);
 
     const timer = setTimeout(async () => {
         try {
             await sendProfessionalMessage(jid,
-                `Opa, ${pushName}! 👋\n\nPassando só pra saber se você conseguiu acessar o link de agendamento ou se ficou com alguma dúvida?\n\nQualquer coisa, estou por aqui! 😉`
+                `Opa, ${pushName}! 👋\n\nPassando só pra saber se você conseguiu acessar o link de agendamento ou se ficou com alguma dúvida?\n\nQualquer coisa, estou por aqui! 😉`,
+                instance
             );
             followUpQueue.delete(jid);
         } catch (e) {
@@ -32,7 +33,7 @@ export function scheduleBookingFollowUp(jid: string, pushName: string) {
 // ----------------------------------------------------
 // 1. GRADE DE HORÁRIOS (Botão do Card)
 // ----------------------------------------------------
-export async function handleScheduleLead(msgBody: string, from: string, pushName: string): Promise<boolean> {
+export async function handleScheduleLead(msgBody: string, from: string, pushName: string, instance?: string): Promise<boolean> {
     if (!msgBody.includes('Vi a aula de') && !msgBody.includes('agendar uma experimental')) return false;
 
     console.log(`[SCHEDULE LEAD] Detectado click na Grade de Horários: ${from}`);
@@ -41,8 +42,8 @@ export async function handleScheduleLead(msgBody: string, from: string, pushName
     let targetModality = identifyModality(lowerMsg);
 
     if (targetModality) {
-        await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nQue legal que você se interessou pela aula da grade! 🤩`);
-        await sendModalityDetails(from, targetModality);
+        await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nQue legal que você se interessou pela aula da grade! 🤩`, instance);
+        await sendModalityDetails(from, targetModality, instance);
         await notifySocios(`🚀 NOVO LEAD DA GRADE: ${msgBody}\nDe: ${pushName}`, { jid: from, name: pushName });
         return true;
     }
@@ -52,7 +53,7 @@ export async function handleScheduleLead(msgBody: string, from: string, pushName
 // ----------------------------------------------------
 // 2. SITE LEAD FALLBACK (Mensagem vinda do site)
 // ----------------------------------------------------
-export async function handleSiteLeadFallback(msgBody: string, from: string, pushName: string): Promise<boolean> {
+export async function handleSiteLeadFallback(msgBody: string, from: string, pushName: string, instance?: string): Promise<boolean> {
     if (!msgBody.includes('NOVA MENSAGEM DO SITE')) return false;
 
     console.log(`[SITE FALLBACK] Detectado texto do site vindo de ${from}`);
@@ -64,13 +65,13 @@ export async function handleSiteLeadFallback(msgBody: string, from: string, push
     let targetModality = identifyModality(lowerMsg);
 
     if (targetModality) {
-        await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nVi que você tem interesse em *${targetModality.toUpperCase()}*! Ótima escolha. 🤩`);
-        await sendModalityDetails(from, targetModality);
+        await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nVi que você tem interesse em *${targetModality.toUpperCase()}*! Ótima escolha. 🤩`, instance);
+        await sendModalityDetails(from, targetModality, instance);
         await notifySocios(`🚀 NOVO LEAD VIA LINK (JÁ FILTRADO): ${targetModality.toUpperCase()}\nDe: ${pushName}`, { jid: from, name: pushName });
     } else {
-        await sendProfessionalMessage(from, "Olá! Recebi sua mensagem. Como sou um robô, não entendi exatamente o que você disse, mas escolha uma opção abaixo que eu te ajudo! 👇");
+        await sendProfessionalMessage(from, "Olá! Recebi sua mensagem. Como sou um robô, não entendi exatamente o que você disse, mas escolha uma opção abaixo que eu te ajudo! 👇", instance);
         setTimeout(async () => {
-            await sendMainMenu(from, pushName);
+            await sendMainMenu(from, pushName, instance);
         }, 2000);
     }
     return true;
@@ -79,7 +80,7 @@ export async function handleSiteLeadFallback(msgBody: string, from: string, push
 // ----------------------------------------------------
 // 3. PALAVRAS-CHAVE DIRETAS (Grade, Preço, Local, Humano)
 // ----------------------------------------------------
-export async function handleDirectKeywords(msgBody: string, from: string, pushName: string, input: string): Promise<boolean> {
+export async function handleDirectKeywords(msgBody: string, from: string, pushName: string, input: string, instance?: string): Promise<boolean> {
     // Ignora se estiver navegando no menu
     if (input?.startsWith('menu_') || input?.startsWith('exp_') || input?.startsWith('goal_') || input?.startsWith('mod_')) return false;
 
@@ -88,29 +89,29 @@ export async function handleDirectKeywords(msgBody: string, from: string, pushNa
     // Grade
     if (lowerMsg.includes('grade') || lowerMsg.includes('horario') || lowerMsg.includes('aulas') || lowerMsg.includes('turmas')) {
         if (isGreeting(msgBody)) {
-            await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nVi que você quer saber nossos horários. É pra já!`);
+            await sendProfessionalMessage(from, `Olá, ${pushName}! 👋\n\nVi que você quer saber nossos horários. É pra já!`, instance);
             await new Promise(r => setTimeout(r, 1000));
         }
-        await sendScheduleList(from);
+        await sendScheduleList(from, instance);
         await saveFlowState(from, 'SELECT_MODALITY');
         return true;
     }
 
     // Preços
     if (lowerMsg.includes('preco') || lowerMsg.includes('preço') || lowerMsg.includes('valor') || lowerMsg.includes('custo') || lowerMsg.includes('mensalidade')) {
-        await sendPrices(from, pushName);
+        await sendPrices(from, pushName, instance);
         return true;
     }
 
     // Localização
     if (lowerMsg.includes('endereco') || lowerMsg.includes('endereço') || lowerMsg.includes('onde fica') || lowerMsg.includes('local') || lowerMsg.includes('mapa')) {
-        await sendLocationInfo(from);
+        await sendLocationInfo(from, instance);
         return true;
     }
 
     // Humano
     if (lowerMsg.includes('humano') || lowerMsg.includes('atendente') || lowerMsg.includes('falar com gente') || lowerMsg.includes('suporte')) {
-        await sendHumanHandoff(from, pushName);
+        await sendHumanHandoff(from, pushName, instance);
         return true;
     }
 
@@ -120,11 +121,11 @@ export async function handleDirectKeywords(msgBody: string, from: string, pushNa
 // ----------------------------------------------------
 // 4. MENU SELECTION LOGIC
 // ----------------------------------------------------
-export async function handleMenuSelection(input: string, from: string, pushName: string, currentState: any): Promise<boolean> {
+export async function handleMenuSelection(input: string, from: string, pushName: string, currentState: any, instance?: string): Promise<boolean> {
     if (currentState?.step === 'MENU_MAIN') {
         // 1. Quero Dançar
         if (input === 'menu_dance' || input === '1' || input.includes('dança')) {
-            await sendProfessionalMessage(from, "Que incrível que você quer dançar com a gente! 🤩\n\nPara eu te indicar a turma perfeita, preciso te conhecer um pouquinho melhor.\n\nPrimeiro, *como você gostaria de ser chamado?*");
+            await sendProfessionalMessage(from, "Que incrível que você quer dançar com a gente! 🤩\n\nPara eu te indicar a turma perfeita, preciso te conhecer um pouquinho melhor.\n\nPrimeiro, *como você gostaria de ser chamado?*", instance);
             await saveFlowState(from, 'ASK_NAME');
             addLabelToConversation(from, 'prospect').catch(err => console.error(err));
             return true;
@@ -132,47 +133,47 @@ export async function handleMenuSelection(input: string, from: string, pushName:
 
         // 1.B Voltar ao Menu
         if (input === 'menu_menu' || input === '0' || input === 'voltar') {
-            await sendMainMenu(from, pushName);
+            await sendMainMenu(from, pushName, instance);
             return true;
         }
 
         // 2. Grade
         if (input === 'menu_schedule' || input === '2' || input.includes('grade') || input.includes('horario')) {
-            await sendScheduleList(from);
+            await sendScheduleList(from, instance);
             await saveFlowState(from, 'SELECT_MODALITY');
             return true;
         }
 
         // 3.B Agendar (Vindo do final do fluxo)
         if (input === 'final_booking' || input === 'agendar aula') {
-            await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.");
+            await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.", instance);
             setTimeout(async () => {
-                await sendPrices(from, pushName);
+                await sendPrices(from, pushName, instance);
             }, 1000);
             return true;
         }
 
         // 3. Preços
         if (input === 'menu_prices' || input === '3' || input.includes('preço') || input.includes('valor')) {
-            await sendPrices(from, pushName);
+            await sendPrices(from, pushName, instance);
             return true;
         }
 
         // 4. Localização
         if (input === 'menu_location' || input === '4' || input.includes('endereço')) {
-            await sendLocationInfo(from);
+            await sendLocationInfo(from, instance);
             return true;
         }
 
         // 5. Humano
         if (input === 'menu_human' || input === '5' || input.includes('humano')) {
-            await sendHumanHandoff(from, pushName);
+            await sendHumanHandoff(from, pushName, instance);
             return true;
         }
 
         // 6. Outros/Lutas/Etc (Opção oculta/extra)
         if (input === 'mod_outros' || input === '6' || input.includes('todas')) {
-            await sendOtherModalities(from);
+            await sendOtherModalities(from, instance);
             return true;
         }
     }
@@ -196,7 +197,7 @@ function identifyModality(text: string): string {
     return "";
 }
 
-export async function sendMainMenu(from: string, pushName: string) {
+export async function sendMainMenu(from: string, pushName: string, instance?: string) {
     await sendList(from, "Menu XPACE", `Olá, ${pushName}! Sou o X-Bot.\nEscolha uma opção:`, "ABRIR MENU", [
         {
             title: "Navegação",
@@ -207,12 +208,12 @@ export async function sendMainMenu(from: string, pushName: string) {
                 { id: "menu_location", title: "📍 Localização", description: "Endereço e mapa" },
                 { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
             ]
-        }
+        }, instance
     ]);
     await saveFlowState(from, 'MENU_MAIN');
 }
 
-async function sendModalityDetails(from: string, modality: string) {
+async function sendModalityDetails(from: string, modality: string, instance?: string) {
     let details = "";
     if (modality === 'street') details = "👟 *STREET & FUNK*\n\n*KIDS (5+):* Seg/Qua 08h, 14h30, 19h\n*TEENS/JUNIOR (12+):* Seg/Qua 19h | Ter/Qui 09h, 14h30\n*INICIANTE (12+):* Ter/Qui 20h\n*SENIOR/ADULTO (16+):* Seg/Qua 20h, Sex 19h, Sáb 10h\n*STREET FUNK (15+):* Sex 20h";
     if (modality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*JAZZ (18+):* Seg/Qua 20h (Inic) | Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
@@ -223,17 +224,17 @@ async function sendModalityDetails(from: string, modality: string) {
     // fallback for brevity
     if (!details) details = "Ainda estamos atualizando os horários desta modalidade! 😅";
 
-    await sendProfessionalMessage(from, details);
+    await sendProfessionalMessage(from, details, instance);
     await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: modality });
 
     setTimeout(async () => {
         await sendList(from, "Próximos Passos", "Gostou dos horários?", "O QUE FAZER?", [
             { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
-        ]);
+        ], instance);
     }, 2000);
 }
 
-export async function sendScheduleList(from: string) {
+export async function sendScheduleList(from: string, instance?: string) {
     await sendList(
         from, "Grade de Horários 📅", "Toque em uma modalidade:", "VER GRADE",
         [
@@ -247,46 +248,47 @@ export async function sendScheduleList(from: string) {
                     { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet" },
                 ]
             }
-        ]
+        ], instance
     );
 }
 
-export async function sendPrices(from: string, pushName: string) {
+export async function sendPrices(from: string, pushName: string, instance?: string) {
     await sendProfessionalMessage(from,
         `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
         `💎 *PASSE LIVRE:* R$ 350/mês\n` +
         `*2x NA SEMANA:* Mensal R$ 215 | Semestral R$ 195 | Anual R$ 165\n\n` +
-        `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`
+        `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`,
+        instance
     );
     await deleteFlowState(from);
-    scheduleBookingFollowUp(from, pushName);
+    scheduleBookingFollowUp(from, pushName, instance);
 }
 
-export async function sendLocationInfo(from: string) {
-    await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
-    await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito.\n_Digite 0 para voltar._");
+export async function sendLocationInfo(from: string, instance?: string) {
+    await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville", instance);
+    await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito.\n_Digite 0 para voltar._", instance);
     await deleteFlowState(from);
 }
 
-export async function sendHumanHandoff(from: string, pushName: string) {
-    await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde! ⏳");
+export async function sendHumanHandoff(from: string, pushName: string, instance?: string) {
+    await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde! ⏳", instance);
     await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
     await notifySocios(`🚨 SOLICITAÇÃO DE HUMANO: ${pushName}`, { jid: from, name: pushName });
     addLabelToConversation(from, 'human_handoff').catch(console.error);
 }
 
-async function sendOtherModalities(from: string) {
-    await sendProfessionalMessage(from, "✨ *OUTRAS MODALIDADES*\n\n👠 HEELS\n🥊 LUTAS\n🩰 BALLET\n🇧🇷 POPULARES\n💃 DANÇA DE SALÃO");
+async function sendOtherModalities(from: string, instance?: string) {
+    await sendProfessionalMessage(from, "✨ *OUTRAS MODALIDADES*\n\n👠 HEELS\n🥊 LUTAS\n🩰 BALLET\n🇧🇷 POPULARES\n💃 DANÇA DE SALÃO", instance);
     await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: 'outros' });
 }
 
-export async function handleQuizResponse(msgBody: string, from: string, currentState: any): Promise<boolean> {
+export async function handleQuizResponse(msgBody: string, from: string, currentState: any, instance?: string): Promise<boolean> {
     const step = currentState?.step;
 
     // 1. Resposta do Nome
     if (step === 'ASK_NAME') {
         const name = msgBody.trim();
-        await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`);
+        await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`, instance);
         await saveFlowState(from, 'ASK_AGE', { name });
         return true;
     }
@@ -297,7 +299,7 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
         const name = currentState.data?.name || 'Aluno';
 
         if (!age || isNaN(age)) {
-            await sendProfessionalMessage(from, "Ops, não entendi! Digite apenas a idade (número). Ex: 15");
+            await sendProfessionalMessage(from, "Ops, não entendi! Digite apenas a idade (número). Ex: 15", instance);
             return true;
         }
 
@@ -315,7 +317,7 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
             flowType = 'adult';
         }
 
-        await sendProfessionalMessage(from, `Entendi, ${age} anos! \n\n${recommendation}`);
+        await sendProfessionalMessage(from, `Entendi, ${age} anos! \n\n${recommendation}`, instance);
 
         // Pequeno delay para mandar os botões
         setTimeout(async () => {
@@ -326,7 +328,7 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
                         { id: "mod_outros", title: "✨ Ver Estilos", description: "Saber mais sobre as aulas" }
                     ]
                 }
-            ]);
+            ], instance);
         }, 1500);
 
         // Finaliza o quiz resetando para MENU_MAIN ou deletando

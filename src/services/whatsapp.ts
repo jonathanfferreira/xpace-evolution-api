@@ -3,7 +3,8 @@ import { config } from '../config';
 
 
 // Função Utilitária para Humanização (Digitando...)
-export async function sendProfessionalMessage(to: string, text: string) {
+// Função Utilitária para Humanização (Digitando...)
+export async function sendProfessionalMessage(to: string, text: string, instance?: string) {
     if (!text) return;
 
     // Calcular delay baseado no tamanho do texto
@@ -11,21 +12,22 @@ export async function sendProfessionalMessage(to: string, text: string) {
     const typingTime = Math.min(5000, Math.max(1000, text.length * 50));
 
     // Enviar status "Digitando..."
-    await sendPresence(to, 'composing');
+    await sendPresence(to, 'composing', instance);
 
     // Aguardar o tempo simulado
     await new Promise(resolve => setTimeout(resolve, typingTime));
 
     // Enviar a mensagem real
-    await sendMessage(to, text);
+    await sendMessage(to, text, instance);
 }
 
-export async function sendMessage(to: string, text: string) {
-    const { apiKey, serverUrl, instance } = config.evolutionApi;
+export async function sendMessage(to: string, text: string, instance?: string) {
+    const { apiKey, serverUrl, instance: defaultInstance } = config.evolutionApi;
+    const targetInstance = instance || defaultInstance;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendText/${instance}`,
+            `${serverUrl}/message/sendText/${targetInstance}`,
             {
                 number: to,
                 text: text,
@@ -39,16 +41,14 @@ export async function sendMessage(to: string, text: string) {
                 },
             }
         );
-        console.log(`Message sent to ${to}`);
+        console.log(`Message sent to ${to} via ${targetInstance}`);
     } catch (error: any) {
         console.error("Error sending message:", error?.response?.data || error.message);
     }
 }
 
-export async function sendButtons(to: string, text: string, buttons: { id: string, label: string }[]) {
+export async function sendButtons(to: string, text: string, buttons: { id: string, label: string }[], instance?: string) {
     // FALLBACK: Enviar botões como TEXTO com números
-    // Motivo: Evolution API v2 / WhatsApp frequentemente falha com botões interativos (Error 400)
-
     if (!text || !buttons || buttons.length === 0) return;
 
     let messageBody = text + "\n\n";
@@ -57,17 +57,15 @@ export async function sendButtons(to: string, text: string, buttons: { id: strin
     });
 
     console.log(`[FALLBACK] Sending buttons as text to ${to}`);
-    await sendMessage(to, messageBody);
+    await sendMessage(to, messageBody, instance);
 }
 
-export async function sendList(to: string, title: string, text: string, buttonText: string, sections: { title: string, rows: { id: string, title: string, description?: string }[] }[]) {
+export async function sendList(to: string, title: string, text: string, buttonText: string, sections: { title: string, rows: { id: string, title: string, description?: string }[] }[], instance?: string) {
     // FALLBACK: Enviar lista como TEXTO com números
-    // Motivo: Evolution API v2 / WhatsApp frequentemente falha com listas interativas (Error 400)
-
     if (!text || !sections || sections.length === 0) return;
 
     // Humanização: Enviar "Digitando..."
-    await sendPresence(to, 'composing');
+    await sendPresence(to, 'composing', instance);
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     let messageBody = `*${title}*\n${text}\n\n`;
@@ -86,15 +84,16 @@ export async function sendList(to: string, title: string, text: string, buttonTe
     });
 
     console.log(`[FALLBACK] Sending list as text to ${to}`);
-    await sendMessage(to, messageBody);
+    await sendMessage(to, messageBody, instance);
 }
 
-export async function sendMedia(to: string, url: string, type: 'image' | 'video' | 'document' | 'audio', caption: string = "") {
-    const { apiKey, serverUrl, instance } = config.evolutionApi;
+export async function sendMedia(to: string, url: string, type: 'image' | 'video' | 'document' | 'audio', caption: string = "", instance?: string) {
+    const { apiKey, serverUrl, instance: defaultInstance } = config.evolutionApi;
+    const targetInstance = instance || defaultInstance;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendMedia/${instance}`,
+            `${serverUrl}/message/sendMedia/${targetInstance}`,
             {
                 number: to,
                 media: url,
@@ -109,18 +108,19 @@ export async function sendMedia(to: string, url: string, type: 'image' | 'video'
                 },
             }
         );
-        console.log(`${type} sent to ${to}`);
+        console.log(`${type} sent to ${to} via ${targetInstance}`);
     } catch (error: any) {
         console.error(`Error sending ${type}:`, error?.response?.data || error.message);
     }
 }
 
-export async function sendPresence(to: string, presence: 'composing' | 'recording' | 'paused') {
-    const { apiKey, serverUrl, instance } = config.evolutionApi;
+export async function sendPresence(to: string, presence: 'composing' | 'recording' | 'paused', instance?: string) {
+    const { apiKey, serverUrl, instance: defaultInstance } = config.evolutionApi;
+    const targetInstance = instance || defaultInstance;
 
     try {
         await axios.post(
-            `${serverUrl}/chat/sendPresence/${instance}`,
+            `${serverUrl}/chat/sendPresence/${targetInstance}`,
             {
                 number: to,
                 presence: presence,
@@ -138,12 +138,13 @@ export async function sendPresence(to: string, presence: 'composing' | 'recordin
     }
 }
 
-export async function sendLocation(to: string, lat: number, lon: number, name: string, address: string) {
-    const { apiKey, serverUrl, instance } = config.evolutionApi;
+export async function sendLocation(to: string, lat: number, lon: number, name: string, address: string, instance?: string) {
+    const { apiKey, serverUrl, instance: defaultInstance } = config.evolutionApi;
+    const targetInstance = instance || defaultInstance;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendLocation/${instance}`,
+            `${serverUrl}/message/sendLocation/${targetInstance}`,
             {
                 number: to,
                 latitude: lat,
@@ -158,18 +159,19 @@ export async function sendLocation(to: string, lat: number, lon: number, name: s
                 },
             }
         );
-        console.log(`Location card sent to ${to}`);
+        console.log(`Location card sent to ${to} via ${targetInstance}`);
     } catch (error: any) {
         console.error("Error sending location:", error?.response?.data || error.message);
     }
 }
 
-export async function sendReaction(to: string, messageKey: any, emoji: string) {
-    const { apiKey, serverUrl, instance } = config.evolutionApi;
+export async function sendReaction(to: string, messageKey: any, emoji: string, instance?: string) {
+    const { apiKey, serverUrl, instance: defaultInstance } = config.evolutionApi;
+    const targetInstance = instance || defaultInstance;
 
     try {
         await axios.post(
-            `${serverUrl}/message/sendReaction/${instance}`,
+            `${serverUrl}/message/sendReaction/${targetInstance}`,
             {
                 number: to,
                 reaction: emoji,
@@ -182,7 +184,7 @@ export async function sendReaction(to: string, messageKey: any, emoji: string) {
                 },
             }
         );
-        console.log(`Reaction ${emoji} sent`);
+        console.log(`Reaction ${emoji} sent via ${targetInstance}`);
     } catch (error: any) {
         console.error("Error sending reaction:", error?.response?.data || error.message);
     }
