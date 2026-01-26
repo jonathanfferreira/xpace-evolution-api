@@ -180,7 +180,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 if (['1', '2', '3', '4', '5', '6'].includes(input)) {
                     if (!currentState) {
                         await saveFlowState(from, 'MENU_MAIN');
-                        currentState = { step: 'MENU_MAIN' }; // Force local update
+                        currentState = { step: 'MENU_MAIN', data: {} }; // Force local update with correct type
                     }
                 }
 
