@@ -30,39 +30,47 @@ async function setupAlceu() {
 
         // 2. Criar Nova Instância
         console.log(`🔨 Criando instância ${newInstanceName}...`);
+
+        let created = false;
         try {
             await axios.post(`${serverUrl}/instance/create`, {
                 instanceName: newInstanceName,
-                token: "", // Optional
                 qrcode: true,
-                webhook: webhookUrl || "https://SEU-BOT-URL-AQUI/webhook", // Placeholder if null
-                events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE"] // Common events
+                integration: "WHATSAPP-BAILEYS"
             }, {
                 headers: { apikey: apiKey }
             });
             console.log(`✅ Instância ${newInstanceName} criada!`);
+            created = true;
         } catch (e: any) {
-            if (e.response?.data?.error?.includes('already exists')) {
+            if (e.response?.data?.error?.includes('already exists') || e.response?.data?.response?.message?.includes('already exists')) {
                 console.log(`⚠️ Instância ${newInstanceName} já existe.`);
-                // Update webhook just in case
-                if (webhookUrl) {
-                    await axios.post(`${serverUrl}/webhook/set/${newInstanceName}`, {
-                        webhook: {
-                            enabled: true,
-                            url: webhookUrl,
-                            byEvents: false,
-                            base64: false,
-                            events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE"]
-                        }
-                    }, { headers: { apikey: apiKey } });
-                    console.log(`🔄 Webhook atualizado.`);
-                }
+                created = true;
             } else {
                 throw e;
             }
         }
 
-        // 3. Obter QR Code
+        // 3. Configurar Webhook (Sempre tentar configurar)
+        if (created && webhookUrl) {
+            console.log(`🔗 Configurando Webhook: ${webhookUrl}`);
+            try {
+                await axios.post(`${serverUrl}/webhook/set/${newInstanceName}`, {
+                    webhook: {
+                        enabled: true,
+                        url: webhookUrl,
+                        byEvents: false,
+                        base64: false,
+                        events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE"]
+                    }
+                }, { headers: { apikey: apiKey } });
+                console.log(`✅ Webhook configurado com sucesso.`);
+            } catch (error: any) {
+                console.error("⚠️ Falha ao configurar webhook:", error?.response?.data || error.message);
+            }
+        }
+
+        // 4. Obter QR Code
         console.log(`📷 Buscando QR Code...`);
         const qrResponse = await axios.get(`${serverUrl}/instance/connect/${newInstanceName}`, {
             headers: { apikey: apiKey }
