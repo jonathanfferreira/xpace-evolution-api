@@ -138,7 +138,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
             }
 
             // 2. CHECAR SE ESTÁ EM HANDOFF
-            const currentState = await getFlowState(from);
+            let currentState = await getFlowState(from);
             if (currentState?.step === 'HUMAN_INTERVENTION' || currentState?.step === 'WAITING_FOR_HUMAN') {
                 const lastIntervention = currentState.data?.timestamp || 0;
                 if (Date.now() - lastIntervention < 30 * 60 * 1000) {
