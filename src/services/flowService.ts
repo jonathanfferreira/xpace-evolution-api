@@ -130,10 +130,25 @@ export async function handleMenuSelection(input: string, from: string, pushName:
             return true;
         }
 
+        // 1.B Voltar ao Menu
+        if (input === 'menu_menu' || input === '0' || input === 'voltar') {
+            await sendMainMenu(from, pushName);
+            return true;
+        }
+
         // 2. Grade
         if (input === 'menu_schedule' || input === '2' || input.includes('grade') || input.includes('horario')) {
             await sendScheduleList(from);
             await saveFlowState(from, 'SELECT_MODALITY');
+            return true;
+        }
+
+        // 3.B Agendar (Vindo do final do fluxo)
+        if (input === 'final_booking' || input === 'agendar aula') {
+            await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.");
+            setTimeout(async () => {
+                await sendPrices(from, pushName);
+            }, 1000);
             return true;
         }
 
