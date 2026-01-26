@@ -264,3 +264,60 @@ async function sendOtherModalities(from: string) {
     await sendProfessionalMessage(from, "✨ *OUTRAS MODALIDADES*\n\n👠 HEELS\n🥊 LUTAS\n🩰 BALLET\n🇧🇷 POPULARES\n💃 DANÇA DE SALÃO");
     await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: 'outros' });
 }
+
+export async function handleQuizResponse(msgBody: string, from: string, currentState: any): Promise<boolean> {
+    const step = currentState?.step;
+
+    // 1. Resposta do Nome
+    if (step === 'ASK_NAME') {
+        const name = msgBody.trim();
+        await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`);
+        await saveFlowState(from, 'ASK_AGE', { name });
+        return true;
+    }
+
+    // 2. Resposta da Idade
+    if (step === 'ASK_AGE') {
+        const age = parseInt(msgBody.replace(/\D/g, ''));
+        const name = currentState.data?.name || 'Aluno';
+
+        if (!age || isNaN(age)) {
+            await sendProfessionalMessage(from, "Ops, não entendi! Digite apenas a idade (número). Ex: 15");
+            return true;
+        }
+
+        let recommendation = "";
+        let flowType = "";
+
+        if (age <= 11) {
+            recommendation = "Para essa idade, temos o **Baby Class** (3-5 anos) e o **Kids** (6-11 anos)! 🧸✨\n\n- Ballet\n- Jazz\n- Street Dance\n\nQuer ver os horários dessas turmas?";
+            flowType = 'kids';
+        } else if (age >= 12 && age < 16) {
+            recommendation = "Show! Para teens (12-15 anos), a energia é lá em cima! ⚡\n\n- Street Dance\n- K-Pop\n- Jazz\n\nQuer ver a grade teen?";
+            flowType = 'teen';
+        } else {
+            recommendation = "Para adultos (16+), temos turmas incríveis, do iniciante ao avançado! 🔥\n\n- Street / Hip Hop\n- Jazz & Heels\n- Ritmos / Fit\n\nQuer conferir os horários?";
+            flowType = 'adult';
+        }
+
+        await sendProfessionalMessage(from, `Entendi, ${age} anos! \n\n${recommendation}`);
+
+        // Pequeno delay para mandar os botões
+        setTimeout(async () => {
+            await sendList(from, "Recomendação", "Como quer prosseguir?", "VER OPÇÕES", [
+                {
+                    title: "Próximos Passos", rows: [
+                        { id: "menu_schedule", title: "📅 Ver Horários", description: "Ver grade completa" },
+                        { id: "mod_outros", title: "✨ Ver Estilos", description: "Saber mais sobre as aulas" }
+                    ]
+                }
+            ]);
+        }, 1500);
+
+        // Finaliza o quiz resetando para MENU_MAIN ou deletando
+        await saveFlowState(from, 'MENU_MAIN', { name, age, flowType });
+        return true;
+    }
+
+    return false;
+}

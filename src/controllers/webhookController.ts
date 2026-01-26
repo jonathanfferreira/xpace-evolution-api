@@ -4,7 +4,7 @@ import { generateResponse } from '../services/ai';
 import { sendMessage, sendProfessionalMessage, sendList, sendReaction, sendPresence } from '../services/whatsapp';
 import { notifySocios } from '../services/notificationService';
 import { getSmartName } from '../utils/textUtils';
-import { handleScheduleLead, handleSiteLeadFallback, handleDirectKeywords, handleMenuSelection, sendMainMenu } from '../services/flowService';
+import { handleScheduleLead, handleSiteLeadFallback, handleDirectKeywords, handleMenuSelection, sendMainMenu, handleQuizResponse } from '../services/flowService';
 
 // Queue & Caches
 const messageQueues = new Map<string, Promise<void>>();
@@ -204,6 +204,9 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 // 8. FLOW STATE HANDLING
                 const handledMenu = await handleMenuSelection(input, from, pushName, currentState);
                 if (handledMenu) return;
+
+                const handledQuiz = await handleQuizResponse(msgBody, from, currentState);
+                if (handledQuiz) return;
 
 
                 // 9. AI FALLBACK
