@@ -178,7 +178,10 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
                 // 5. SAFETY CHECK (Input numérico sem estado)
                 if (['1', '2', '3', '4', '5', '6'].includes(input)) {
-                    if (!currentState) await saveFlowState(from, 'MENU_MAIN');
+                    if (!currentState) {
+                        await saveFlowState(from, 'MENU_MAIN');
+                        currentState = { step: 'MENU_MAIN' }; // Force local update
+                    }
                 }
 
                 // 6. PALAVRAS-CHAVE DIRETAS
