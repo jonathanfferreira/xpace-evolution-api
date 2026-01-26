@@ -233,7 +233,7 @@ async function sendModalityDetails(from: string, modality: string) {
     }, 2000);
 }
 
-async function sendScheduleList(from: string) {
+export async function sendScheduleList(from: string) {
     await sendList(
         from, "Grade de Horários 📅", "Toque em uma modalidade:", "VER GRADE",
         [
@@ -251,7 +251,7 @@ async function sendScheduleList(from: string) {
     );
 }
 
-async function sendPrices(from: string, pushName: string) {
+export async function sendPrices(from: string, pushName: string) {
     await sendProfessionalMessage(from,
         `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
         `💎 *PASSE LIVRE:* R$ 350/mês\n` +
@@ -262,13 +262,13 @@ async function sendPrices(from: string, pushName: string) {
     scheduleBookingFollowUp(from, pushName);
 }
 
-async function sendLocationInfo(from: string) {
+export async function sendLocationInfo(from: string) {
     await sendLocation(from, -26.296210, -48.845500, "XPACE", "Rua Tijucas, 401 - Joinville");
     await sendProfessionalMessage(from, "Estamos no coração de Joinville! 📍\n\n✅ Estacionamento gratuito.\n_Digite 0 para voltar._");
     await deleteFlowState(from);
 }
 
-async function sendHumanHandoff(from: string, pushName: string) {
+export async function sendHumanHandoff(from: string, pushName: string) {
     await sendProfessionalMessage(from, "Sem problemas! Já chamei alguém da equipe pra te ajudar. Aguarde! ⏳");
     await saveFlowState(from, 'WAITING_FOR_HUMAN', { timestamp: Date.now() });
     await notifySocios(`🚨 SOLICITAÇÃO DE HUMANO: ${pushName}`, { jid: from, name: pushName });

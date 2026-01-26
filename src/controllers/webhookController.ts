@@ -4,7 +4,7 @@ import { generateResponse } from '../services/ai';
 import { sendMessage, sendProfessionalMessage, sendList, sendReaction, sendPresence } from '../services/whatsapp';
 import { notifySocios } from '../services/notificationService';
 import { getSmartName } from '../utils/textUtils';
-import { handleScheduleLead, handleSiteLeadFallback, handleDirectKeywords, handleMenuSelection, sendMainMenu, handleQuizResponse } from '../services/flowService';
+import { handleScheduleLead, handleSiteLeadFallback, handleDirectKeywords, handleMenuSelection, sendMainMenu, handleQuizResponse, sendPrices, sendScheduleList, sendLocationInfo, sendHumanHandoff } from '../services/flowService';
 
 // Queue & Caches
 const messageQueues = new Map<string, Promise<void>>();
@@ -217,10 +217,45 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
                         // Tratamento simples da resposta da IA
                         if (aiResponse) {
-                            await sendProfessionalMessage(from, aiResponse);
-                            // Not parsing [TAGS] for now to save space, assuming AI instruction handles most.
-                            // If needed, we can re-add the tag parser here.
-                            if (aiResponse.includes('[SHOW_MENU]')) await sendMainMenu(from, pushName);
+                            // Parse TAGS
+                            let cleanResponse = aiResponse;
+                            const tagActionMap: { [key: string]: Function } = {
+                                '[SHOW_MENU]': () => sendMainMenu(from, pushName),
+                                '[SHOW_PRICES]': () => sendPrices(from, pushName),
+                                '[SHOW_SCHEDULE]': () => sendScheduleList(from),
+                                '[SHOW_LOCATION]': () => sendLocationInfo(from),
+                                '[HANDOFF]': () => sendHumanHandoff(from, pushName),
+                                '[UNKNOWN]': async () => {
+                                    // Fallback for unknown
+                                    await sendProfessionalMessage(from, "Ainda estou aprendendo sobre isso! 😅 Mas veja o que eu sei fazer:");
+                                    await sendMainMenu(from, pushName);
+                                }
+                            };
+
+                            let detectedAction: Function | null = null;
+
+                            // Find and extract tag
+                            for (const tag in tagActionMap) {
+                                if (cleanResponse.includes(tag)) {
+                                    cleanResponse = cleanResponse.replace(tag, '').trim();
+                                    detectedAction = tagActionMap[tag];
+                                    break; // Assume one major action per response
+                                }
+                            }
+
+                            // Send clean text first (if any remains)
+                            if (cleanResponse && cleanResponse !== '[UNKNOWN]') {
+                                await sendProfessionalMessage(from, cleanResponse);
+                            }
+
+                            // Execute action
+                            if (detectedAction) {
+                                await new Promise(r => setTimeout(r, 1000)); // Natural delay
+                                await detectedAction();
+                            } else if (!cleanResponse && aiResponse.includes('[UNKNOWN]')) {
+                                // Double safety for UNKNOWN if pure tag
+                                await tagActionMap['[UNKNOWN]']();
+                            }
                         }
                     }
                 }
