@@ -222,10 +222,13 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
 
                 // 9. AI FALLBACK
-                // A IA agora é o último recurso, acionada apenas se nenhum fluxo manual capturou a mensagem.
-                if (msgBody && msgBody.length > 1 && (!currentState || currentState?.step === 'MENU_MAIN')) {
-                    // Only use AI if NOT in a strict flow (like asking name)
-                    if (!input?.startsWith('menu_') && !input?.startsWith('mod_')) {
+                // A IA responde a mensagens livres/conversacionais em estados permitidos
+                const aiAllowedStates = [null, undefined, 'MENU_MAIN', 'VIEW_MODALITY_DETAILS', 'SELECT_MODALITY', 'VIEWED_PRICES'];
+                const isInAiAllowedState = !currentState || aiAllowedStates.includes(currentState?.step);
+
+                if (msgBody && msgBody.length > 1 && isInAiAllowedState) {
+                    // Only use AI if NOT in a strict flow (like asking name) and not a menu selection
+                    if (!input?.startsWith('menu_') && !input?.startsWith('mod_') && !input?.startsWith('goal_') && !input?.startsWith('exp_')) {
                         const aiResponse = await generateResponse(from, msgBody);
 
                         // Se a IA respondeu, e estávamos no MENU_MAIN, limpamos o estado para não travar o usuário
