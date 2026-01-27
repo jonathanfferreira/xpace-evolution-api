@@ -230,7 +230,7 @@ async function sendModalityDetails(from: string, modality: string, instance?: st
     if (modality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 20h";
     if (modality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO (12+):* Ter/Qui 09h\n*TEATRO (15+):* Ter/Qui 15h30\n*ACROBACIA (12+):* Seg/Qua 20h";
     if (modality === 'salao') details = "💃 *DANÇAS POPULARES*\n\n*POPULARES (12+):* Ter/Qui 14h";
-    
+
     if (!details) details = "Ainda estamos atualizando os horários desta modalidade! 😅 Mas você pode perguntar para um de nossos consultores.";
 
     await sendProfessionalMessage(from, details, instance);
@@ -312,7 +312,7 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
         if (step === 'ASK_NAME') {
             const name = msgBody.trim();
             if (!name) return false;
-            
+
             await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`, instance);
             await saveFlowState(from, 'ASK_AGE', { name });
             await saveStudentProfile(from, { name });
@@ -322,111 +322,102 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
         // 2. Resposta da Idade
         if (step === 'ASK_AGE') {
             const age = parseInt(msgBody.replace(/\D/g, ''));
-        const name = currentState.data?.name || 'Aluno';
+            const name = currentState.data?.name || 'Aluno';
 
-        if (!age || isNaN(age)) {
-            await sendProfessionalMessage(from, "Ops, não entendi! Digite apenas a idade (número). Ex: 15", instance);
-            return true;
-        }
+            if (!age || isNaN(age)) {
+                await sendProfessionalMessage(from, "Ops, não entendi! Digite apenas a idade (número). Ex: 15", instance);
+                return true;
+            }
 
-        let recommendation = "";
-        let flowType = "";
+            let recommendation = "";
+            let flowType = "";
 
-        if (age <= 11) {
-            recommendation = "Para essa idade, temos o **Baby Class** (3-5 anos) e o **Kids** (6-11 anos)! 🧸✨\n\n- Ballet\n- Jazz\n- Street Dance\n\nQuer ver os horários dessas turmas?";
-            flowType = 'kids';
-        } else if (age >= 12 && age < 16) {
-            recommendation = "Show! Para teens (12-15 anos), a energia é lá em cima! ⚡\n\n- Street Dance\n- K-Pop\n- Jazz\n\nQuer ver a grade teen?";
-            flowType = 'teen';
-        } else {
-            recommendation = "Para adultos (16+), temos turmas incríveis, do iniciante ao avançado! 🔥\n\n- Street / Hip Hop\n- Jazz & Heels\n- Ritmos / Fit\n\nQuer conferir os horários?";
-            flowType = 'adult';
-        }
+            if (age <= 11) {
+                recommendation = "Para essa idade, temos o **Baby Class** (3-5 anos) e o **Kids** (6-11 anos)! 🧸✨\n\n- Ballet\n- Jazz\n- Street Dance\n\nQuer ver os horários dessas turmas?";
+                flowType = 'kids';
+            } else if (age >= 12 && age < 16) {
+                recommendation = "Show! Para teens (12-15 anos), a energia é lá em cima! ⚡\n\n- Street Dance\n- K-Pop\n- Jazz\n\nQuer ver a grade teen?";
+                flowType = 'teen';
+            } else {
+                recommendation = "Para adultos (16+), temos turmas incríveis, do iniciante ao avançado! 🔥\n\n- Street / Hip Hop\n- Jazz & Heels\n- Ritmos / Fit\n\nQuer conferir os horários?";
+                flowType = 'adult';
+            }
 
-        await sendProfessionalMessage(from, `Entendi, ${age} anos! \n\n${recommendation}`, instance);
+            await sendProfessionalMessage(from, `Entendi, ${age} anos! \n\n${recommendation}`, instance);
 
-        // Pequeno delay para mandar os botões
-        setTimeout(async () => {
-            await sendList(from, "Recomendação", "Como quer prosseguir?", "VER OPÇÕES", [
+            // Pequeno delay para perguntar o objetivo (etapa sequencial, sem menu duplicado)
+            await new Promise(r => setTimeout(r, 1500));
+
+            // Próxima etapa: Perguntar Objetivo
+            await sendList(from, "Seu Objetivo 🎯", "O que você busca com a dança?", "ESCOLHER OBJETIVO", [
                 {
-                    title: "Próximos Passos", rows: [
-                        { id: "menu_schedule", title: "📅 Ver Horários", description: "Ver grade completa" },
-                        { id: "mod_outros", title: "✨ Ver Estilos", description: "Saber mais sobre as aulas" }
+                    title: "Opções", rows: [
+                        { id: "goal_fun", title: "Socializar e Diversão", description: "Conhecer pessoas e relaxar" },
+                        { id: "goal_health", title: "Saúde e Bem-estar", description: "Atividade física e queima calórica" },
+                        { id: "goal_learn", title: "Aprender Técnica", description: "Focar no aprendizado do zero" },
+                        { id: "goal_pro", title: "Performance/Profissional", description: "Aperfeiçoamento e palcos" }
                     ]
                 }
             ], instance);
-        }, 1500);
 
-        // Próxima etapa: Perguntar Objetivo
-        await sendList(from, "Seu Objetivo 🎯", "O que você busca com a dança?", "ESCOLHER OBJETIVO", [
-            {
-                title: "Opções", rows: [
-                    { id: "goal_fun", title: "Socializar e Diversão", description: "Conhecer pessoas e relaxar" },
-                    { id: "goal_health", title: "Saúde e Bem-estar", description: "Atividade física e queima calórica" },
-                    { id: "goal_learn", title: "Aprender Técnica", description: "Focar no aprendizado do zero" },
-                    { id: "goal_pro", title: "Performance/Profissional", description: "Aperfeiçoamento e palcos" }
-                ]
-            }
-        ], instance);
+            await saveFlowState(from, 'ASK_GOAL', { name, age, flowType });
+            return true;
+        }
 
-        await saveFlowState(from, 'ASK_GOAL', { name, age, flowType });
-        return true;
-    }
+        // 3. Resposta do Objetivo
+        if (step === 'ASK_GOAL') {
+            const goalId = msgBody.toLowerCase();
+            const { name, age, flowType } = currentState.data;
 
-    // 3. Resposta do Objetivo
-    if (step === 'ASK_GOAL') {
-        const goalId = msgBody.toLowerCase();
-        const { name, age, flowType } = currentState.data;
+            await sendList(from, "Sua Experiência 💃", "Você já dançou antes?", "ESCOLHER EXPERIÊNCIA", [
+                {
+                    title: "Opções", rows: [
+                        { id: "exp_none", title: "Nunca dancei", description: "Quero começar do zero" },
+                        { id: "exp_basic", title: "Já fiz algumas aulas", description: "Conheço o básico" },
+                        { id: "exp_advanced", title: "Já danço há tempo", description: "Tenho experiência" }
+                    ]
+                }
+            ], instance);
 
-        await sendList(from, "Sua Experiência 💃", "Você já dançou antes?", "ESCOLHER EXPERIÊNCIA", [
-            {
-                title: "Opções", rows: [
-                    { id: "exp_none", title: "Nunca dancei", description: "Quero começar do zero" },
-                    { id: "exp_basic", title: "Já fiz algumas aulas", description: "Conheço o básico" },
-                    { id: "exp_advanced", title: "Já danço há tempo", description: "Tenho experiência" }
-                ]
-            }
-        ], instance);
+            await saveFlowState(from, 'ASK_EXPERIENCE', { name, age, flowType, goalId });
+            return true;
+        }
 
-        await saveFlowState(from, 'ASK_EXPERIENCE', { name, age, flowType, goalId });
-        return true;
-    }
+        // 4. Resposta da Experiência e Recomendação Final
+        if (step === 'ASK_EXPERIENCE') {
+            const expId = msgBody.toLowerCase();
+            const { name, age, flowType, goalId } = currentState.data;
 
-    // 4. Resposta da Experiência e Recomendação Final
-    if (step === 'ASK_EXPERIENCE') {
-        const expId = msgBody.toLowerCase();
-        const { name, age, flowType, goalId } = currentState.data;
+            const recommendation = getPersonalizedRecommendation(age, goalId, expId);
 
-        const recommendation = getPersonalizedRecommendation(age, goalId, expId);
+            await sendProfessionalMessage(from, `Incrível, ${name}! Com base no que você me contou, preparei uma recomendação especial para você:`, instance);
 
-        await sendProfessionalMessage(from, `Incrível, ${name}! Com base no que você me contou, preparei uma recomendação especial para você:`, instance);
-        
-        setTimeout(async () => {
-            await sendProfessionalMessage(from, recommendation.text, instance);
-            
             setTimeout(async () => {
-                await sendList(from, "Próximos Passos", "O que achou da recomendação?", "VER OPÇÕES", [
-                    {
-                        title: "Ações", rows: [
-                            { id: recommendation.modalityId, title: "📅 Ver Horários", description: "Ver grade desta turma" },
-                            { id: "menu_schedule", title: "🗓️ Ver Grade Completa", description: "Ver todas as turmas" },
-                            { id: "menu_human", title: "🙋‍♂️ Falar com Consultor", description: "Tirar dúvidas específicas" }
-                        ]
-                    }
-                ], instance);
-                await saveFlowState(from, 'MENU_MAIN', { name, age, flowType, goalId, expId, recommended: recommendation.modalityId });
-                await saveStudentProfile(from, { 
-                    name, 
-                    age, 
-                    goal: goalId, 
-                    experience: expId, 
-                    last_recommendation: recommendation.modalityId 
-                });
-            }, 2000);
-        }, 1500);
+                await sendProfessionalMessage(from, recommendation.text, instance);
 
-        return true;
-    }
+                setTimeout(async () => {
+                    await sendList(from, "Próximos Passos", "O que achou da recomendação?", "VER OPÇÕES", [
+                        {
+                            title: "Ações", rows: [
+                                { id: recommendation.modalityId, title: "📅 Ver Horários", description: "Ver grade desta turma" },
+                                { id: "menu_schedule", title: "🗓️ Ver Grade Completa", description: "Ver todas as turmas" },
+                                { id: "menu_human", title: "🙋‍♂️ Falar com Consultor", description: "Tirar dúvidas específicas" }
+                            ]
+                        }
+                    ], instance);
+                    await saveFlowState(from, 'MENU_MAIN', { name, age, flowType, goalId, expId, recommended: recommendation.modalityId });
+                    await saveStudentProfile(from, {
+                        name,
+                        age,
+                        goal: goalId,
+                        experience: expId,
+                        last_recommendation: recommendation.modalityId
+                    });
+                }, 2000);
+            }, 1500);
+
+            return true;
+        }
 
         return false;
     } catch (error) {
