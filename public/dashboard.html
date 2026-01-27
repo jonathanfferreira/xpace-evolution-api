@@ -1,20 +1,41 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XPACE Analytics Dashboard</title>
+    <title>XPACE Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <style>
+        /* XPACE CUSTOM FONTS */
+        @font-face {
+            font-family: 'Steelfish';
+            src: url('/fonts/Steelfish Bd.otf') format('opentype');
+            font-weight: 700;
+        }
+
+        @font-face {
+            font-family: 'Chillax';
+            src: url('/fonts/Chillax-Bold.otf') format('opentype');
+            font-weight: 700;
+        }
+
+        @font-face {
+            font-family: 'Chillax';
+            src: url('/fonts/Chillax-Semibold.otf') format('opentype');
+            font-weight: 600;
+        }
+
         :root {
             --color-primary: #6324b2;
             --color-secondary: #eb00bc;
             --color-accent: #ff5200;
             --color-background: #050505;
-            --color-text: #ffffff;
-            --color-text-muted: rgba(255, 255, 255, 0.6);
+            --gradient-xpace: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+            --gradient-purple: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
         }
 
         * {
@@ -25,12 +46,13 @@
 
         body {
             font-family: 'Poppins', sans-serif;
-            background-color: var(--color-background);
-            color: var(--color-text);
+            background: var(--color-background);
+            color: #fff;
             min-height: 100vh;
             background-image:
-                radial-gradient(circle at 15% 50%, rgba(99, 36, 178, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 85% 30%, rgba(235, 0, 188, 0.10) 0%, transparent 50%);
+                radial-gradient(ellipse at 20% 0%, rgba(99, 36, 178, 0.25) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(235, 0, 188, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 82, 0, 0.05) 0%, transparent 70%);
         }
 
         .container {
@@ -39,14 +61,14 @@
             padding: 2rem;
         }
 
-        /* Header */
+        /* HEADER */
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 3rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .logo {
@@ -55,60 +77,76 @@
             gap: 1rem;
         }
 
-        .logo h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+        .logo-text {
+            font-family: 'Steelfish', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: var(--gradient-xpace);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .logo-subtitle {
+            font-family: 'Chillax', sans-serif;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: -8px;
         }
 
         .status {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            color: var(--color-text-muted);
+            gap: 0.75rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.75rem 1.25rem;
+            border-radius: 100px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             background: #00ff88;
             border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
         }
 
-        /* Metrics Cards */
+        /* METRICS GRID */
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 1.5rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }
 
         .metric-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 1.5rem;
             position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 1.75rem;
             overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .metric-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(99, 36, 178, 0.2);
-            border-color: rgba(235, 0, 188, 0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
         }
 
         .metric-card::before {
@@ -116,157 +154,224 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(180deg, var(--color-primary), var(--color-secondary));
+            width: 100%;
+            height: 3px;
+            background: var(--gradient-xpace);
+            opacity: 0.8;
+        }
+
+        .metric-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, transparent 50%, rgba(235, 0, 188, 0.3) 50%);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-6px);
+            border-color: rgba(235, 0, 188, 0.3);
+            box-shadow: 0 20px 60px rgba(99, 36, 178, 0.15);
         }
 
         .metric-icon {
             font-size: 2rem;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+            filter: drop-shadow(0 0 10px rgba(235, 0, 188, 0.5));
         }
 
         .metric-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
+            font-family: 'Steelfish', sans-serif;
+            font-size: 3.5rem;
+            letter-spacing: 2px;
+            background: linear-gradient(180deg, #fff 0%, rgba(255, 255, 255, 0.7) 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
+            line-height: 1;
         }
 
         .metric-label {
-            font-size: 0.875rem;
-            color: var(--color-text-muted);
+            font-family: 'Chillax', sans-serif;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 0.25rem;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 0.5rem;
         }
 
-        .metric-change {
+        .metric-rate {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
             font-size: 0.75rem;
-            margin-top: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 100px;
             color: #00ff88;
         }
 
-        .metric-change.negative {
-            color: #ff4444;
-        }
-
-        /* Charts Section */
+        /* CHARTS */
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
         }
 
         .chart-card {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.02);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 1.75rem;
+            clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
         }
 
         .chart-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
+            font-family: 'Chillax', sans-serif;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+        }
+
+        .chart-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--gradient-xpace);
+            border-radius: 2px;
         }
 
         .chart-container {
-            position: relative;
-            height: 250px;
+            height: 280px;
         }
 
-        /* Loading State */
-        .loading {
+        /* RESPONSIVE */
+        @media (max-width: 1024px) {
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-value {
+                font-size: 2.5rem;
+            }
+        }
+
+        /* LOADING */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--color-background);
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 200px;
-            color: var(--color-text-muted);
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.5s;
         }
 
-        .loading::after {
-            content: '';
-            width: 30px;
-            height: 30px;
-            border: 3px solid rgba(255,255,255,0.1);
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
             border-top-color: var(--color-secondary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-left: 1rem;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Error State */
-        .error {
-            color: #ff4444;
-            text-align: center;
-            padding: 2rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container { padding: 1rem; }
-            .header { flex-direction: column; gap: 1rem; text-align: center; }
-            .charts-grid { grid-template-columns: 1fr; }
-            .metric-value { font-size: 2rem; }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
+
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loader"></div>
+    </div>
+
     <div class="container">
         <header class="header">
             <div class="logo">
-                <h1>🎯 XPACE Analytics</h1>
+                <div>
+                    <div class="logo-text">XPACE</div>
+                    <div class="logo-subtitle">Analytics Dashboard</div>
+                </div>
             </div>
             <div class="status">
                 <span class="status-dot"></span>
-                <span id="lastUpdate">Carregando...</span>
+                <span id="lastUpdate">Conectando...</span>
             </div>
         </header>
 
-        <!-- Metrics Cards -->
         <div class="metrics-grid" id="metricsGrid">
             <div class="metric-card">
                 <div class="metric-icon">👥</div>
-                <div class="metric-value" id="totalLeads">-</div>
+                <div class="metric-value" id="totalLeads">0</div>
                 <div class="metric-label">Total Leads</div>
             </div>
             <div class="metric-card">
                 <div class="metric-icon">📅</div>
-                <div class="metric-value" id="scheduleRate">-</div>
+                <div class="metric-value" id="scheduleViews">0</div>
                 <div class="metric-label">Viram Horários</div>
+                <div class="metric-rate" id="scheduleRate">0%</div>
             </div>
             <div class="metric-card">
                 <div class="metric-icon">💰</div>
-                <div class="metric-value" id="priceRate">-</div>
+                <div class="metric-value" id="priceViews">0</div>
                 <div class="metric-label">Viram Preços</div>
+                <div class="metric-rate" id="priceRate">0%</div>
             </div>
             <div class="metric-card">
                 <div class="metric-icon">🎉</div>
-                <div class="metric-value" id="bookingRate">-</div>
-                <div class="metric-label">Clicaram Agendar</div>
+                <div class="metric-value" id="bookings">0</div>
+                <div class="metric-label">Agendaram</div>
+                <div class="metric-rate" id="bookingRate">0%</div>
             </div>
         </div>
 
-        <!-- Charts -->
         <div class="charts-grid">
             <div class="chart-card">
-                <div class="chart-title">📊 Funil de Conversão</div>
+                <div class="chart-title">Funil de Conversão</div>
                 <div class="chart-container">
                     <canvas id="funnelChart"></canvas>
                 </div>
             </div>
             <div class="chart-card">
-                <div class="chart-title">📈 Leads por Dia (Últimos 7 dias)</div>
+                <div class="chart-title">Leads por Dia</div>
                 <div class="chart-container">
                     <canvas id="dailyChart"></canvas>
                 </div>
@@ -275,177 +380,119 @@
     </div>
 
     <script>
-        let funnelChart = null;
-        let dailyChart = null;
-
-        // Configuração comum dos gráficos
-        Chart.defaults.color = 'rgba(255,255,255,0.6)';
-        Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
+        let funnelChart = null, dailyChart = null;
+        Chart.defaults.color = 'rgba(255,255,255,0.5)';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
 
         async function fetchAnalytics() {
             try {
-                const response = await fetch('/analytics');
-                const data = await response.json();
-                
-                if (!data.success) throw new Error('Erro ao buscar dados');
-                
+                const res = await fetch('/analytics');
+                const data = await res.json();
+                if (!data.success) throw new Error('API Error');
+
                 updateMetrics(data.stats);
                 updateFunnelChart(data.stats);
                 updateDailyChart(data.daily);
-                updateLastRefresh();
-                
-            } catch (error) {
-                console.error('Erro:', error);
-                document.getElementById('lastUpdate').textContent = 'Erro ao carregar';
+                updateTime();
+                hideLoading();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('lastUpdate').textContent = 'Erro de conexão';
+                hideLoading();
             }
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
         }
 
         function updateMetrics(stats) {
             const { totalLeads, byEvent, conversionRates } = stats;
-            
             document.getElementById('totalLeads').textContent = totalLeads || 0;
-            document.getElementById('scheduleRate').textContent = 
-                conversionRates.schedule_view ? `${conversionRates.schedule_view}%` : '0%';
-            document.getElementById('priceRate').textContent = 
-                conversionRates.price_view ? `${conversionRates.price_view}%` : '0%';
-            document.getElementById('bookingRate').textContent = 
-                conversionRates.booking_click ? `${conversionRates.booking_click}%` : '0%';
+            document.getElementById('scheduleViews').textContent = byEvent.schedule_view || 0;
+            document.getElementById('priceViews').textContent = byEvent.price_view || 0;
+            document.getElementById('bookings').textContent = byEvent.booking_click || 0;
+            document.getElementById('scheduleRate').textContent = `${conversionRates.schedule_view || 0}%`;
+            document.getElementById('priceRate').textContent = `${conversionRates.price_view || 0}%`;
+            document.getElementById('bookingRate').textContent = `${conversionRates.booking_click || 0}%`;
         }
 
         function updateFunnelChart(stats) {
             const { byEvent } = stats;
             const ctx = document.getElementById('funnelChart').getContext('2d');
-            
-            const labels = ['Menu', 'Horários', 'Preços', 'Booking'];
             const data = [
                 byEvent.menu_view || 0,
                 byEvent.schedule_view || 0,
                 byEvent.price_view || 0,
                 byEvent.booking_click || 0
             ];
-
             if (funnelChart) funnelChart.destroy();
-            
             funnelChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: ['MENU', 'HORÁRIOS', 'PREÇOS', 'BOOKING'],
                     datasets: [{
-                        label: 'Leads',
                         data: data,
                         backgroundColor: [
                             'rgba(99, 36, 178, 0.8)',
-                            'rgba(150, 50, 180, 0.8)',
+                            'rgba(150, 40, 180, 0.8)',
                             'rgba(235, 0, 188, 0.8)',
                             'rgba(255, 82, 0, 0.8)'
                         ],
-                        borderColor: [
-                            'rgba(99, 36, 178, 1)',
-                            'rgba(150, 50, 180, 1)',
-                            'rgba(235, 0, 188, 1)',
-                            'rgba(255, 82, 0, 1)'
-                        ],
-                        borderWidth: 1,
-                        borderRadius: 8
+                        borderRadius: 6,
+                        borderSkipped: false
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        x: {
-                            grid: { display: false }
-                        }
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.03)' } },
+                        x: { grid: { display: false } }
                     }
                 }
             });
         }
 
         function updateDailyChart(daily) {
-            if (!daily || daily.length === 0) return;
-            
+            if (!daily?.length) return;
             const ctx = document.getElementById('dailyChart').getContext('2d');
-            
             const labels = daily.map(d => {
                 const date = new Date(d.date);
                 return date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' });
             }).reverse();
-            
-            const leadsData = daily.map(d => d.leads).reverse();
-            const priceData = daily.map(d => d.priceViews).reverse();
-            const bookingData = daily.map(d => d.bookings).reverse();
-
             if (dailyChart) dailyChart.destroy();
-            
             dailyChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
-                        {
-                            label: 'Leads',
-                            data: leadsData,
-                            borderColor: 'rgba(99, 36, 178, 1)',
-                            backgroundColor: 'rgba(99, 36, 178, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        },
-                        {
-                            label: 'Preços',
-                            data: priceData,
-                            borderColor: 'rgba(235, 0, 188, 1)',
-                            backgroundColor: 'transparent',
-                            tension: 0.4
-                        },
-                        {
-                            label: 'Bookings',
-                            data: bookingData,
-                            borderColor: 'rgba(255, 82, 0, 1)',
-                            backgroundColor: 'transparent',
-                            tension: 0.4
-                        }
+                        { label: 'Leads', data: daily.map(d => d.leads).reverse(), borderColor: '#6324b2', backgroundColor: 'rgba(99,36,178,0.1)', fill: true, tension: 0.4, pointRadius: 4 },
+                        { label: 'Preços', data: daily.map(d => d.priceViews).reverse(), borderColor: '#eb00bc', tension: 0.4, pointRadius: 3 },
+                        { label: 'Bookings', data: daily.map(d => d.bookings).reverse(), borderColor: '#ff5200', tension: 0.4, pointRadius: 3 }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { usePointStyle: true }
-                        }
-                    },
+                    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } },
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        x: {
-                            grid: { display: false }
-                        }
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.03)' } },
+                        x: { grid: { display: false } }
                     }
                 }
             });
         }
 
-        function updateLastRefresh() {
+        function updateTime() {
             const now = new Date();
-            document.getElementById('lastUpdate').textContent = 
-                `Atualizado às ${now.toLocaleTimeString('pt-BR')}`;
+            document.getElementById('lastUpdate').textContent = `Atualizado ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
         }
 
-        // Carrega dados iniciais
         fetchAnalytics();
-
-        // Auto-refresh a cada 30 segundos
         setInterval(fetchAnalytics, 30000);
     </script>
 </body>
+
 </html>
