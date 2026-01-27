@@ -179,7 +179,8 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 // **PRIORITY 1: CHECK ACTIVE FLOW STATE**
                 // Se o usuário já está em um fluxo (ex: respondendo nome), isso processa primeiro.
                 if (currentState) {
-                    const handledQuiz = await handleQuizResponse(msgBody, from, currentState);
+                    // Passamos o 'input' (que contém o RowID se for uma lista) para o quiz
+                    const handledQuiz = await handleQuizResponse(selectedRowId || msgBody, from, currentState);
                     if (handledQuiz) return;
 
                     const handledMenu = await handleMenuSelection(input, from, pushName, currentState);

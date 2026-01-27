@@ -176,6 +176,13 @@ export async function handleMenuSelection(input: string, from: string, pushName:
             await sendOtherModalities(from, instance);
             return true;
         }
+
+        // 7. Modalidades Específicas (Vindo da recomendação)
+        if (input.startsWith('mod_')) {
+            const modality = input.replace('mod_', '');
+            await sendModalityDetails(from, modality, instance);
+            return true;
+        }
     }
     return false;
 }
@@ -332,10 +339,105 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
             ], instance);
         }, 1500);
 
-        // Finaliza o quiz resetando para MENU_MAIN ou deletando
-        await saveFlowState(from, 'MENU_MAIN', { name, age, flowType });
+        // Próxima etapa: Perguntar Objetivo
+        await sendList(from, "Seu Objetivo 🎯", "O que você busca com a dança?", "ESCOLHER OBJETIVO", [
+            {
+                title: "Opções", rows: [
+                    { id: "goal_fun", title: "Socializar e Diversão", description: "Conhecer pessoas e relaxar" },
+                    { id: "goal_health", title: "Saúde e Bem-estar", description: "Atividade física e queima calórica" },
+                    { id: "goal_learn", title: "Aprender Técnica", description: "Focar no aprendizado do zero" },
+                    { id: "goal_pro", title: "Performance/Profissional", description: "Aperfeiçoamento e palcos" }
+                ]
+            }
+        ], instance);
+
+        await saveFlowState(from, 'ASK_GOAL', { name, age, flowType });
+        return true;
+    }
+
+    // 3. Resposta do Objetivo
+    if (step === 'ASK_GOAL') {
+        const goalId = msgBody.toLowerCase();
+        const { name, age, flowType } = currentState.data;
+
+        await sendList(from, "Sua Experiência 💃", "Você já dançou antes?", "ESCOLHER EXPERIÊNCIA", [
+            {
+                title: "Opções", rows: [
+                    { id: "exp_none", title: "Nunca dancei", description: "Quero começar do zero" },
+                    { id: "exp_basic", title: "Já fiz algumas aulas", description: "Conheço o básico" },
+                    { id: "exp_advanced", title: "Já danço há tempo", description: "Tenho experiência" }
+                ]
+            }
+        ], instance);
+
+        await saveFlowState(from, 'ASK_EXPERIENCE', { name, age, flowType, goalId });
+        return true;
+    }
+
+    // 4. Resposta da Experiência e Recomendação Final
+    if (step === 'ASK_EXPERIENCE') {
+        const expId = msgBody.toLowerCase();
+        const { name, age, flowType, goalId } = currentState.data;
+
+        const recommendation = getPersonalizedRecommendation(age, goalId, expId);
+
+        await sendProfessionalMessage(from, `Incrível, ${name}! Com base no que você me contou, preparei uma recomendação especial para você:`, instance);
+        
+        setTimeout(async () => {
+            await sendProfessionalMessage(from, recommendation.text, instance);
+            
+            setTimeout(async () => {
+                await sendList(from, "Próximos Passos", "O que achou da recomendação?", "VER OPÇÕES", [
+                    {
+                        title: "Ações", rows: [
+                            { id: recommendation.modalityId, title: "📅 Ver Horários", description: "Ver grade desta turma" },
+                            { id: "menu_schedule", title: "🗓️ Ver Grade Completa", description: "Ver todas as turmas" },
+                            { id: "menu_human", title: "🙋‍♂️ Falar com Consultor", description: "Tirar dúvidas específicas" }
+                        ]
+                    }
+                ], instance);
+                await saveFlowState(from, 'MENU_MAIN', { name, age, flowType, goalId, expId, recommended: recommendation.modalityId });
+            }, 2000);
+        }, 1500);
+
         return true;
     }
 
     return false;
+}
+
+function getPersonalizedRecommendation(age: number, goalId: string, expId: string): { text: string, modalityId: string } {
+    // Lógica de Recomendação
+    if (age <= 11) {
+        return {
+            text: "Para os pequenos, nossa recomendação é o **KIDS XPACE**! 🧸\n\nÉ um mix de Street e Jazz que foca na coordenação e diversão. É perfeito para começar com o pé direito!",
+            modalityId: "mod_street"
+        };
+    }
+
+    if (goalId.includes('health') || goalId.includes('fun')) {
+        return {
+            text: "Você vai amar nossas aulas de **RITMOS / FIT**! 🔥\n\nMuita energia, música boa e queima calórica sem nem perceber que está treinando. É a escolha ideal para quem quer se divertir e cuidar da saúde!",
+            modalityId: "mod_ritmos"
+        };
+    }
+
+    if (expId.includes('none') || expId.includes('basic')) {
+        if (age >= 12 && age < 16) {
+            return {
+                text: "Nossa turma de **STREET TEEN** é o lugar certo! ⚡\n\nUma galera da sua idade, aprendendo as bases das danças urbanas com muita vibe. Você vai se sentir em casa!",
+                modalityId: "mod_street"
+            };
+        }
+        return {
+            text: "Recomendo começar pelo **STREET DANCE INICIANTE**! 👟\n\nPasso a passo, do zero, para você ganhar confiança e dominar o ritmo. É nossa turma mais procurada por quem está começando!",
+            modalityId: "mod_street"
+        };
+    }
+
+    // Default para experientes ou performance
+    return {
+        text: "Para o seu nível, as turmas de **STREET SENIOR** ou **JAZZ FUNK** são ideais! 🔥\n\nFoco em coreografia, performance e técnica avançada. Vamos elevar sua dança para o próximo nível!",
+        modalityId: "mod_street"
+    };
 }
