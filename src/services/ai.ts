@@ -65,10 +65,17 @@ export async function generateResponse(userId: string, userMessage: string): Pro
         const profile = await getStudentProfile(userId);
 
         // 2. Montar o Prompt
-        const chatHistory = history.map(h => ({
+        let chatHistory = history.map(h => ({
             role: h.role,
             parts: h.parts
         }));
+
+        // [FIX] Validation: Ensure history starts with 'user'
+        // Gemini API throws error if the first message is from 'model'
+        if (chatHistory.length > 0 && chatHistory[0].role === 'model') {
+            console.log("⚠️ [AI FIX] Removed leading 'model' message from history to prevent API error.");
+            chatHistory.shift();
+        }
 
         // Injetar Perfil do Aluno (Memória de Longo Prazo)
         if (profile) {
