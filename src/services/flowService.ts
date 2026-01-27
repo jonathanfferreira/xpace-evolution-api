@@ -3,6 +3,8 @@ import { getFlowState, saveFlowState, deleteFlowState, saveStudentProfile, getSt
 import { notifySocios } from './notificationService';
 import { addLabelToConversation } from './chatwoot';
 import { isGreeting } from '../utils/textUtils';
+import { trackEvent } from './analytics';
+import { scheduleFollowUps, cancelFollowUps } from './followup';
 
 // Helper: Saudação baseada no horário
 function getGreeting(): string {
@@ -160,10 +162,11 @@ export async function handleMenuSelection(input: string, from: string, pushName:
 
         // 3.B Agendar (Vindo do final do fluxo)
         if (input === 'final_booking' || input === 'agendar aula') {
+            await trackEvent(from, 'booking_click');
+            await cancelFollowUps(from); // Cancela follow-ups pois lead converteu
             await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.", instance);
-            setTimeout(async () => {
-                await sendPrices(from, pushName, instance);
-            }, 1000);
+            await new Promise(r => setTimeout(r, 1000));
+            await sendPrices(from, pushName, instance);
             return true;
         }
 
@@ -220,6 +223,8 @@ export async function handleMenuSelection(input: string, from: string, pushName:
 
         // Agendar aula
         if (input === 'final_booking') {
+            await trackEvent(from, 'booking_click');
+            await cancelFollowUps(from); // Cancela follow-ups pois lead converteu
             await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.", instance);
             await new Promise(r => setTimeout(r, 1000));
             await sendPrices(from, pushName, instance);
@@ -273,6 +278,7 @@ export async function sendMainMenu(from: string, pushName: string, instance?: st
         }
     ], instance);
     await saveFlowState(from, 'MENU_MAIN');
+    await trackEvent(from, 'menu_view');
 }
 
 async function sendModalityDetails(from: string, modality: string, instance?: string) {
@@ -321,6 +327,7 @@ export async function sendScheduleList(from: string, instance?: string) {
             }
         ], instance
     );
+    await trackEvent(from, 'schedule_view');
 }
 
 export async function sendPrices(from: string, pushName: string, instance?: string) {
@@ -331,9 +338,11 @@ export async function sendPrices(from: string, pushName: string, instance?: stri
         `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`,
         instance
     );
-    // Em vez de deletar, marcamos que o usuário viu os preços para o follow-up ser mais preciso
+    // Marca estado e tracka evento
     await saveFlowState(from, 'VIEWED_PRICES', { timestamp: Date.now() });
-    scheduleBookingFollowUp(from, pushName, instance);
+    await trackEvent(from, 'price_view');
+    // Agenda follow-ups automáticos (15min, 2h, 24h)
+    await scheduleFollowUps(from, instance);
 }
 
 export async function sendLocationInfo(from: string, instance?: string) {
