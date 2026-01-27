@@ -5,7 +5,10 @@ const pool = new Pool({
     connectionString: config.database.uri,
     ssl: {
         rejectUnauthorized: false
-    }
+    },
+    max: 10, // Limita o número máximo de conexões no pool
+    idleTimeoutMillis: 30000, // Fecha conexões inativas após 30 segundos
+    connectionTimeoutMillis: 2000, // Timeout para tentar conectar
 });
 
 interface Message {
