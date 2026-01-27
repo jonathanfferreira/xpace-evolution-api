@@ -184,6 +184,47 @@ export async function handleMenuSelection(input: string, from: string, pushName:
             return true;
         }
     }
+
+    // TRATAMENTO PARA ESTADO SELECT_MODALITY (após ver a grade)
+    if (currentState?.step === 'SELECT_MODALITY' || currentState?.step === 'VIEW_MODALITY_DETAILS') {
+        // Seleção de modalidade
+        if (input?.startsWith('mod_')) {
+            const modality = input.replace('mod_', '');
+            if (modality === 'outros') {
+                await sendOtherModalities(from, instance);
+            } else {
+                await sendModalityDetails(from, modality, instance);
+            }
+            return true;
+        }
+
+        // Voltar ao menu
+        if (input === 'menu_menu' || input === '0' || input === 'voltar') {
+            await sendMainMenu(from, pushName, instance);
+            return true;
+        }
+
+        // Agendar aula
+        if (input === 'final_booking') {
+            await sendProfessionalMessage(from, "Maravilha! Vamos agendar. 🤩\n\nVocê pode garantir sua vaga direto pelo nosso sistema ou ver os valores primeiro.", instance);
+            await new Promise(r => setTimeout(r, 1000));
+            await sendPrices(from, pushName, instance);
+            return true;
+        }
+
+        // Ver grade completa
+        if (input === 'menu_schedule') {
+            await sendScheduleList(from, instance);
+            return true;
+        }
+
+        // Falar com humano
+        if (input === 'menu_human') {
+            await sendHumanHandoff(from, pushName, instance);
+            return true;
+        }
+    }
+
     return false;
 }
 
