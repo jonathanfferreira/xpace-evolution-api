@@ -1,6 +1,7 @@
 
 import express from 'express';
 import bodyParser from 'body-parser';
+import path from 'path';
 import dotenv from 'dotenv';
 import { handleWebhook } from './controllers/webhookController';
 import { handleNewLead, handleQuizLead } from './controllers/leadController';
@@ -14,6 +15,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
+
+// Servir arquivos estáticos (dashboard)
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Log every request
 app.use((req, res, next) => {
