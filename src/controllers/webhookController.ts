@@ -97,6 +97,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
     const processMessage = async () => {
         try {
+            const instanceName = body.instance; // Captura o nome da instância (ex: 'XPACE' ou 'ALCEU')
             const rawPushName = body.instanceData?.user || data.pushName;
             const smartName = getSmartName(rawPushName);
             const pushName = smartName || "Aluno";
@@ -110,20 +111,20 @@ async function handleMessageUpsert(req: Request, res: Response) {
             let selectedRowId = data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
             const input = (selectedRowId || msgBody?.trim())?.toLowerCase();
 
-            // 1. HANDOFF DO DONO
-            if (data.key.fromMe) {
-                const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
-                if (text) {
-                    if (text.toLowerCase().trim() === '/bot') {
-                        await deleteFlowState(from);
-                        await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.");
-                        return;
-                    }
-                    if (text.toLowerCase().trim() === '/stop') {
-                        await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
-                        await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.");
-                        return;
-                    }
+                // 1. HANDOFF DO DONO
+                if (data.key.fromMe) {
+                    const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
+                    if (text) {
+                        if (text.toLowerCase().trim() === '/bot') {
+                            await deleteFlowState(from);
+                            await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.", instanceName);
+                            return;
+                        }
+                        if (text.toLowerCase().trim() === '/stop') {
+                            await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
+                            await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.", instanceName);
+                            return;
+                        }
                     // Auto-learning
                     console.log(`[HANDOFF] Intervenção humana detectada para ${from}.`);
                     await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
@@ -157,33 +158,33 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 if (msgBody?.toLowerCase().trim() === '/reset') {
                     await clearHistory(from);
                     await deleteFlowState(from);
-                    await sendProfessionalMessage(from, "♻️ Tudo limpo! Memória e Fluxo reiniciados.");
+                    await sendProfessionalMessage(from, "♻️ Tudo limpo! Memória e Fluxo reiniciados.", instanceName);
                     return;
                 }
                 if (msgBody?.toLowerCase().trim() === '/debug') {
                     const state = await getFlowState(from);
-                    await sendProfessionalMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`);
+                    await sendProfessionalMessage(from, `🐛 *DEBUG* 🐛\nFlow State: ${JSON.stringify(state || 'null')}`, instanceName);
                     return;
                 }
 
                 // --- FLOW SERVICE DELEGATION ---
 
                 // 3. GRADE DE HORÁRIOS (Botão do Card)
-                const handledSchedule = await handleScheduleLead(msgBody, from, pushName);
+                const handledSchedule = await handleScheduleLead(msgBody, from, pushName, instanceName);
                 if (handledSchedule) return;
 
                 // 4. SITE LEAD FALLBACK
-                const handledSite = await handleSiteLeadFallback(msgBody, from, pushName);
+                const handledSite = await handleSiteLeadFallback(msgBody, from, pushName, instanceName);
                 if (handledSite) return;
 
                 // **PRIORITY 1: CHECK ACTIVE FLOW STATE**
                 // Se o usuário já está em um fluxo (ex: respondendo nome), isso processa primeiro.
                 if (currentState) {
                     // Passamos o 'input' (que contém o RowID se for uma lista) para o quiz
-                    const handledQuiz = await handleQuizResponse(selectedRowId || msgBody, from, currentState);
+                    const handledQuiz = await handleQuizResponse(selectedRowId || msgBody, from, currentState, instanceName);
                     if (handledQuiz) return;
 
-                    const handledMenu = await handleMenuSelection(input, from, pushName, currentState);
+                    const handledMenu = await handleMenuSelection(input, from, pushName, currentState, instanceName);
                     if (handledMenu) return;
                 }
 
@@ -191,14 +192,14 @@ async function handleMessageUpsert(req: Request, res: Response) {
                 // Isso evita que o bot force o menu principal quando o usuário digita um número casualmente.
 
                 // 6. PALAVRAS-CHAVE DIRETAS
-                const handledKeywords = await handleDirectKeywords(msgBody, from, pushName, input);
+                const handledKeywords = await handleDirectKeywords(msgBody, from, pushName, input, instanceName);
                 if (handledKeywords) return;
 
                 // 7. MENU PRINCIPAL (Gatilhos)
                 if (isGreeting(msgBody, pushName) || msgBody?.trim() === '0') {
                     await deleteFlowState(from);
-                    await sendReaction(from, messageKey, '👋');
-                    await sendMainMenu(from, pushName);
+                    await sendReaction(from, messageKey, '👋', instanceName);
+                    await sendMainMenu(from, pushName, instanceName);
                     return;
                 }
 
@@ -226,15 +227,15 @@ async function handleMessageUpsert(req: Request, res: Response) {
                             // Parse TAGS
                             let cleanResponse = aiResponse;
                             const tagActionMap: { [key: string]: Function } = {
-                                '[SHOW_MENU]': () => sendMainMenu(from, pushName),
-                                '[SHOW_PRICES]': () => sendPrices(from, pushName),
-                                '[SHOW_SCHEDULE]': () => sendScheduleList(from),
-                                '[SHOW_LOCATION]': () => sendLocationInfo(from),
-                                '[HANDOFF]': () => sendHumanHandoff(from, pushName),
+                                '[SHOW_MENU]': () => sendMainMenu(from, pushName, instanceName),
+                                '[SHOW_PRICES]': () => sendPrices(from, pushName, instanceName),
+                                '[SHOW_SCHEDULE]': () => sendScheduleList(from, instanceName),
+                                '[SHOW_LOCATION]': () => sendLocationInfo(from, instanceName),
+                                '[HANDOFF]': () => sendHumanHandoff(from, pushName, instanceName),
                                 '[UNKNOWN]': async () => {
                                     // Fallback for unknown
-                                    await sendProfessionalMessage(from, "Ainda estou aprendendo sobre isso! 😅 Mas veja o que eu sei fazer:");
-                                    await sendMainMenu(from, pushName);
+                                    await sendProfessionalMessage(from, "Ainda estou aprendendo sobre isso! 😅 Mas veja o que eu sei fazer:", instanceName);
+                                    await sendMainMenu(from, pushName, instanceName);
                                 }
                             };
 
@@ -251,7 +252,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
                             // Send clean text first (if any remains)
                             if (cleanResponse && cleanResponse !== '[UNKNOWN]') {
-                                await sendProfessionalMessage(from, cleanResponse);
+                                await sendProfessionalMessage(from, cleanResponse, instanceName);
                             }
 
                             // Execute action
@@ -268,10 +269,10 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
                 // Audio
                 if (data.message?.audioMessage) {
-                    await sendReaction(from, messageKey, '🎧');
-                    await sendPresence(from, 'recording');
+                    await sendReaction(from, messageKey, '🎧', instanceName);
+                    await sendPresence(from, 'recording', instanceName);
                     setTimeout(async () => {
-                        await sendProfessionalMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! 🏃‍♂️`);
+                        await sendProfessionalMessage(from, `Opa, já estou ouvindo seu áudio, ${pushName}! 🏃‍♂️`, instanceName);
                     }, 2000);
                 }
             }
