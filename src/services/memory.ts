@@ -47,6 +47,18 @@ export async function ensureDbInitialized() {
                 answer TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
+
+            -- Tabela de Perfil do Aluno (Memória de Longo Prazo)
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                user_id TEXT PRIMARY KEY,
+                name TEXT,
+                age INTEGER,
+                goal TEXT,
+                experience TEXT,
+                last_recommendation TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
         `);
 
         console.log('✅ Database initialized (Memory + Flow State)');
@@ -188,5 +200,39 @@ export async function getLearnedContext(): Promise<string> {
     } catch (error) {
         console.error('Error getting learned context:', error);
         return "";
+    }
+}
+
+// --- Student Profile (Long-term Memory) ---
+
+export async function saveStudentProfile(userId: string, profile: any) {
+    try {
+        await pool.query(`
+            INSERT INTO student_profiles (user_id, name, age, goal, experience, last_recommendation, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (user_id) 
+            DO UPDATE SET 
+                name = COALESCE($2, student_profiles.name),
+                age = COALESCE($3, student_profiles.age),
+                goal = COALESCE($4, student_profiles.goal),
+                experience = COALESCE($5, student_profiles.experience),
+                last_recommendation = COALESCE($6, student_profiles.last_recommendation),
+                updated_at = NOW()
+        `, [userId, profile.name, profile.age, profile.goal, profile.experience, profile.last_recommendation]);
+    } catch (error) {
+        console.error('Error saving student profile:', error);
+    }
+}
+
+export async function getStudentProfile(userId: string): Promise<any | null> {
+    try {
+        const res = await pool.query(
+            'SELECT * FROM student_profiles WHERE user_id = $1',
+            [userId]
+        );
+        return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (error) {
+        console.error('Error getting student profile:', error);
+        return null;
     }
 }

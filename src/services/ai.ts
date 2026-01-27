@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config';
-import { getHistory, getLearnedContext, saveMessage } from './memory';
+import { getHistory, getLearnedContext, saveMessage, getStudentProfile } from './memory';
 
 // Configuração do Gemini
 const genAI = new GoogleGenerativeAI(config.gemini.apiKey || '');
@@ -22,6 +22,10 @@ SOBRE A XPACE:
 2. Se o usuário perguntar sobre uma modalidade que NÃO está no seu contexto (ex: Natação, Judô, Yoga, Pilates, Crossfit), você DEVE responder APENAS com a tag: [UNKNOWN].
 3. NÃO TENTE ENROLAR. Se não sabe, use [UNKNOWN].
 
+🧠 MEMÓRIA DE LONGO PRAZO:
+Você receberá informações sobre o perfil do aluno (nome, idade, objetivo). Use isso para personalizar a conversa. 
+Ex: "Oi Jonathan! Que bom te ver de novo. Ainda pensando em fazer Street para emagrecer?"
+
 REGRAS DE RESPOSTA HÍBRIDA:
 Você pode responder com texto, mas se o usuário pedir algo complexo, você DEVE sugerir os Menus Visuais usando TAGS especiais no final da resposta.
 
@@ -34,10 +38,11 @@ TAGS DISPONÍVEIS:
 [UNKNOWN] -> Se o usuário perguntar algo que você não sabe ou não tem certeza.
 
 DIRETRIZES:
-1. NÃO mande textão gigante com horários. Se perguntarem horário, diga: "Temos horários incríveis para todas as idades! Vou te mostrar a grade:" e use a tag [SHOW_SCHEDULE].
+1. NÃO mande textão gigante com horários. Se perguntarem horário, diga: "Temos horários incríveis para todas as idades! Vou te mostrar a grade: [SHOW_SCHEDULE]"
 2. NÃO mande lista de preços por texto. Se perguntarem valor, dê uma base ("Planos a partir de R$100") e use a tag [SHOW_PRICES].
 3. Seja curto e direto. WhatsApp é conversa rápida.
 4. Use Emojis! 🤩💃🚀
+5. PERSUASÃO: Se o usuário demonstrar interesse, incentive-o a marcar uma aula experimental ou vir conhecer o estúdio.
 
 EXEMPLOS:
 Usuário: "Quais os horários de Street?"
@@ -54,18 +59,29 @@ export async function generateResponse(userId: string, userMessage: string): Pro
     try {
         console.log(`🤖 [AI] Generating response for ${userId}...`);
 
-        // 1. Recuperar contexto (Histórico Recente + Aprendizado)
+        // 1. Recuperar contexto (Histórico Recente + Aprendizado + Perfil)
         const history = await getHistory(userId);
         const learnedContext = await getLearnedContext();
+        const profile = await getStudentProfile(userId);
 
         // 2. Montar o Prompt
-        // Transforma o histórico do banco no formato do Gemini
         const chatHistory = history.map(h => ({
-            role: h.role, // 'user' ou 'model'
-            parts: h.parts // [{ text: '...' }]
+            role: h.role,
+            parts: h.parts
         }));
 
-        // Injetar o aprendizado como uma mensagem de sistema no início do histórico para melhor grounding
+        // Injetar Perfil do Aluno (Memória de Longo Prazo)
+        if (profile) {
+            chatHistory.unshift({
+                role: 'user',
+                parts: [{ text: `PERFIL DO ALUNO:\nNome: ${profile.name || 'Não informado'}\nIdade: ${profile.age || 'Não informada'}\nObjetivo: ${profile.goal || 'Não informado'}\nExperiência: ${profile.experience || 'Não informada'}\nÚltima Recomendação: ${profile.last_recommendation || 'Nenhuma'}\n\nUse estas informações para personalizar sua resposta.` }]
+            }, {
+                role: 'model',
+                parts: [{ text: "Entendido. Vou personalizar minha conversa com base no perfil do aluno." }]
+            });
+        }
+
+        // Injetar o aprendizado
         if (learnedContext) {
             chatHistory.unshift({
                 role: 'user',

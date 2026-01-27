@@ -1,5 +1,5 @@
 import { sendMessage, sendProfessionalMessage, sendList, sendLocation, sendReaction } from './whatsapp';
-import { getFlowState, saveFlowState, deleteFlowState } from './memory';
+import { getFlowState, saveFlowState, deleteFlowState, saveStudentProfile, getStudentProfile } from './memory';
 import { notifySocios } from './notificationService';
 import { addLabelToConversation } from './chatwoot';
 import { isGreeting } from '../utils/textUtils';
@@ -304,18 +304,23 @@ async function sendOtherModalities(from: string, instance?: string) {
 }
 
 export async function handleQuizResponse(msgBody: string, from: string, currentState: any, instance?: string): Promise<boolean> {
-    const step = currentState?.step;
+    try {
+        const step = currentState?.step;
+        console.log(`[QUIZ] Processando step ${step} para ${from}. Input: ${msgBody}`);
 
-    // 1. Resposta do Nome
-    if (step === 'ASK_NAME') {
-        const name = msgBody.trim();
-        await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`, instance);
-        await saveFlowState(from, 'ASK_AGE', { name });
-        return true;
-    }
+        // 1. Resposta do Nome
+        if (step === 'ASK_NAME') {
+            const name = msgBody.trim();
+            if (!name) return false;
+            
+            await sendProfessionalMessage(from, `Prazer, ${name}! 😉\n\nAgora me conta: qual a sua idade (ou da criança que vai dançar)?\n_(Digite apenas o número)_`, instance);
+            await saveFlowState(from, 'ASK_AGE', { name });
+            await saveStudentProfile(from, { name });
+            return true;
+        }
 
-    // 2. Resposta da Idade
-    if (step === 'ASK_AGE') {
+        // 2. Resposta da Idade
+        if (step === 'ASK_AGE') {
         const age = parseInt(msgBody.replace(/\D/g, ''));
         const name = currentState.data?.name || 'Aluno';
 
@@ -410,13 +415,25 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
                     }
                 ], instance);
                 await saveFlowState(from, 'MENU_MAIN', { name, age, flowType, goalId, expId, recommended: recommendation.modalityId });
+                await saveStudentProfile(from, { 
+                    name, 
+                    age, 
+                    goal: goalId, 
+                    experience: expId, 
+                    last_recommendation: recommendation.modalityId 
+                });
             }, 2000);
         }, 1500);
 
         return true;
     }
 
-    return false;
+        return false;
+    } catch (error) {
+        console.error(`[QUIZ ERROR] Erro no processamento do quiz para ${from}:`, error);
+        await sendProfessionalMessage(from, "Ops, tive um pequeno probleminha técnico aqui! 😅 Mas já estou de volta. Pode repetir o que você disse?", instance);
+        return true;
+    }
 }
 
 function getPersonalizedRecommendation(age: number, goalId: string, expId: string): { text: string, modalityId: string } {
