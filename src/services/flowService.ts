@@ -226,10 +226,12 @@ async function sendModalityDetails(from: string, modality: string, instance?: st
     if (modality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ FUNK (15+):* Ter 19h, Sáb 09h\n*JAZZ (18+):* Seg/Qua 20h (Inic) | Seg/Qua 21h\n*CONTEMP (12+):* Seg/Qua 19h";
     if (modality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nTer/Qui 20h (XTAGE)";
     if (modality === 'ritmos') details = "💃 *RITMOS & BALLET*\n\n*RITMOS/FIT (15+):* Seg/Qua 08h, 19h | Ter/Qui 19h\n*BALLET (12+):* Ter/Qui 21h";
-    // ... complete list
     if (modality === 'heels') details = "👠 *HEELS (15+)*\n\nQui 17h, 18h, 19h | Sáb 11h, 12h";
-    // fallback for brevity
-    if (!details) details = "Ainda estamos atualizando os horários desta modalidade! 😅";
+    if (modality === 'lutas') details = "🥊 *LUTAS (Muay Thai / Jiu Jitsu)*\n\n*MUAY THAI:* Seg/Qua/Sex 07h, 12h, 18h\n*JIU JITSU:* Ter/Qui 19h, Sáb 10h";
+    if (modality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO:* Sáb 09h às 12h\n*ACROBACIA:* Sex 18h";
+    if (modality === 'salao') details = "💃 *DANÇA DE SALÃO*\n\n*FORRÓ/SAMBA:* Ter 20h\n*BOLERO/SOLTINHO:* Qui 20h";
+    
+    if (!details) details = "Ainda estamos atualizando os horários desta modalidade! 😅 Mas você pode perguntar para um de nossos consultores.";
 
     await sendProfessionalMessage(from, details, instance);
     await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: modality });
@@ -251,8 +253,8 @@ export async function sendScheduleList(from: string, instance?: string) {
                     { id: "mod_street", title: "👟 Street / Urban", description: "Kids, Teens, Adulto" },
                     { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnico, Funk, Lyrical" },
                     { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias" },
-                    // ... abbreviated
-                    { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet" },
+                    { id: "mod_ritmos", title: "💃 Ritmos / Fit", description: "Energia e Bem-estar" },
+                    { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet, etc" },
                 ]
             }
         ], instance
@@ -286,8 +288,19 @@ export async function sendHumanHandoff(from: string, pushName: string, instance?
 }
 
 async function sendOtherModalities(from: string, instance?: string) {
-    await sendProfessionalMessage(from, "✨ *OUTRAS MODALIDADES*\n\n👠 HEELS\n🥊 LUTAS\n🩰 BALLET\n🇧🇷 POPULARES\n💃 DANÇA DE SALÃO", instance);
-    await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: 'outros' });
+    await sendList(from, "Outras Modalidades ✨", "Escolha para ver os horários:", "VER MODALIDADE", [
+        {
+            title: "Mais Opções",
+            rows: [
+                { id: "mod_heels", title: "👠 Heels", description: "Dança no salto" },
+                { id: "mod_lutas", title: "🥊 Lutas", description: "Muay Thai e Jiu Jitsu" },
+                { id: "mod_teatro", title: "🎭 Teatro/Acro", description: "Expressão e movimento" },
+                { id: "mod_salao", title: "💃 Dança de Salão", description: "Para dançar junto" },
+                { id: "menu_menu", title: "🔙 Voltar", description: "Menu Principal" }
+            ]
+        }
+    ], instance);
+    await saveFlowState(from, 'SELECT_MODALITY');
 }
 
 export async function handleQuizResponse(msgBody: string, from: string, currentState: any, instance?: string): Promise<boolean> {
