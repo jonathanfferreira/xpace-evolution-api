@@ -65,14 +65,24 @@ export async function generateResponse(userId: string, userMessage: string): Pro
             parts: h.parts // [{ text: '...' }]
         }));
 
+        // Injetar o aprendizado como uma mensagem de sistema no início do histórico para melhor grounding
+        if (learnedContext) {
+            chatHistory.unshift({
+                role: 'user',
+                parts: [{ text: `CONTEXTO DE APRENDIZADO (RESPOSTAS DO DONO):\n${learnedContext}\n\nUse estas informações se forem relevantes para as próximas perguntas.` }]
+            }, {
+                role: 'model',
+                parts: [{ text: "Entendido. Vou usar o histórico de respostas do dono para guiar minhas próximas interações." }]
+            });
+        }
+
         console.log("DEBUG: Chat History Length:", chatHistory.length);
-        // console.log("DEBUG: Payload:", JSON.stringify({ history: chatHistory, txt: userMessage }));
 
         const chat = model.startChat({
             history: chatHistory,
             systemInstruction: {
                 role: 'system',
-                parts: [{ text: XPACE_CONTEXT + learnedContext }]
+                parts: [{ text: XPACE_CONTEXT }]
             }
         });
 

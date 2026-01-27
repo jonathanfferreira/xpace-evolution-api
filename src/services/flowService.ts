@@ -208,8 +208,8 @@ export async function sendMainMenu(from: string, pushName: string, instance?: st
                 { id: "menu_location", title: "📍 Localização", description: "Endereço e mapa" },
                 { id: "menu_human", title: "🙋‍♂️ Falar com Humano", description: "Atendimento equipe" }
             ]
-        }, instance
-    ]);
+        }
+    ], instance);
     await saveFlowState(from, 'MENU_MAIN');
 }
 
@@ -260,7 +260,8 @@ export async function sendPrices(from: string, pushName: string, instance?: stri
         `🔗 *GARANTIR VAGA:* https://venda.nextfit.com.br/54a0cf4a-176f-46d3-b552-aad35019a4ff/contratos`,
         instance
     );
-    await deleteFlowState(from);
+    // Em vez de deletar, marcamos que o usuário viu os preços para o follow-up ser mais preciso
+    await saveFlowState(from, 'VIEWED_PRICES', { timestamp: Date.now() });
     scheduleBookingFollowUp(from, pushName, instance);
 }
 

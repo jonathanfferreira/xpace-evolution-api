@@ -59,17 +59,14 @@ export async function getHistory(userId: string): Promise<Message[]> {
     try {
         const res = await pool.query(`
             SELECT role, content 
-            FROM (
-                SELECT role, content, created_at 
-                FROM ai_memory 
-                WHERE user_id = $1 
-                ORDER BY created_at DESC 
-                LIMIT 30
-            ) sub 
-            ORDER BY created_at ASC
+            FROM ai_memory 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC 
+            LIMIT 30
         `, [userId]);
 
-        return res.rows.map(row => ({
+        // Invertemos a ordem no código para manter a cronologia correta para a IA
+        return res.rows.reverse().map(row => ({
             role: row.role as 'user' | 'model',
             parts: [{ text: row.content }]
         }));
@@ -86,16 +83,18 @@ export async function saveMessage(userId: string, role: 'user' | 'model', text: 
             [userId, role, text]
         );
 
-        // Limpeza: manter apenas as últimas 50 mensagens
-        await pool.query(`
-            DELETE FROM ai_memory 
-            WHERE id IN (
-                SELECT id FROM ai_memory 
-                WHERE user_id = $1 
-                ORDER BY created_at DESC 
-                OFFSET 50
-            )
-        `, [userId]);
+        // Limpeza estocástica: executa a limpeza apenas em ~10% das vezes para economizar recursos
+        if (Math.random() < 0.1) {
+            await pool.query(`
+                DELETE FROM ai_memory 
+                WHERE id IN (
+                    SELECT id FROM ai_memory 
+                    WHERE user_id = $1 
+                    ORDER BY created_at DESC 
+                    OFFSET 100
+                )
+            `, [userId]);
+        }
 
     } catch (error) {
         console.error('Error saving message:', error);

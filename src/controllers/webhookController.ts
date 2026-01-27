@@ -186,17 +186,8 @@ async function handleMessageUpsert(req: Request, res: Response) {
                     if (handledMenu) return;
                 }
 
-                // 5. SAFETY CHECK (Input numérico sem estado)
-                if (['1', '2', '3', '4', '5', '6'].includes(input)) {
-                    if (!currentState) {
-                        await saveFlowState(from, 'MENU_MAIN');
-                        currentState = { step: 'MENU_MAIN', data: {} }; // Force local update
-
-                        // Retry menu selection with new state
-                        const handledMenuRetry = await handleMenuSelection(input, from, pushName, currentState);
-                        if (handledMenuRetry) return;
-                    }
-                }
+                // 5. REMOVED SAFETY CHECK (Input numérico sem estado) - Deixando para o AI Fallback ou Menu Principal
+                // Isso evita que o bot force o menu principal quando o usuário digita um número casualmente.
 
                 // 6. PALAVRAS-CHAVE DIRETAS
                 const handledKeywords = await handleDirectKeywords(msgBody, from, pushName, input);
@@ -218,10 +209,16 @@ async function handleMessageUpsert(req: Request, res: Response) {
 
 
                 // 9. AI FALLBACK
-                if (msgBody && msgBody.length > 1 && !Object.keys(currentState || {}).length || currentState?.step === 'MENU_MAIN') {
+                // A IA agora é o último recurso, acionada apenas se nenhum fluxo manual capturou a mensagem.
+                if (msgBody && msgBody.length > 1 && (!currentState || currentState?.step === 'MENU_MAIN')) {
                     // Only use AI if NOT in a strict flow (like asking name)
                     if (!input?.startsWith('menu_') && !input?.startsWith('mod_')) {
                         const aiResponse = await generateResponse(from, msgBody);
+                        
+                        // Se a IA respondeu, e estávamos no MENU_MAIN, limpamos o estado para não travar o usuário
+                        if (currentState?.step === 'MENU_MAIN') {
+                            await deleteFlowState(from);
+                        }
 
                         // Tratamento simples da resposta da IA
                         if (aiResponse) {
