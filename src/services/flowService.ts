@@ -4,6 +4,14 @@ import { notifySocios } from './notificationService';
 import { addLabelToConversation } from './chatwoot';
 import { isGreeting } from '../utils/textUtils';
 
+// Helper: Saudação baseada no horário
+function getGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
+}
+
 // Configurações Globais
 const SOCIOS = {
     ALCEU: '554791700812@s.whatsapp.net',
@@ -97,9 +105,15 @@ export async function handleDirectKeywords(msgBody: string, from: string, pushNa
         return true;
     }
 
-    // Preços
+    // Preços - FLUXO HUMANIZADO (não joga tabela direto)
     if (lowerMsg.includes('preco') || lowerMsg.includes('preço') || lowerMsg.includes('valor') || lowerMsg.includes('custo') || lowerMsg.includes('mensalidade')) {
-        await sendPrices(from, pushName, instance);
+        await sendProfessionalMessage(from,
+            `${getGreeting()}, ${pushName}! 😊 Que legal que você quer saber sobre nossos planos!\n\n` +
+            `Antes de te passar os valores, me conta: você já tem alguma modalidade em mente?\n` +
+            `Street Dance, Jazz, K-Pop, Ritmos...? 💃`,
+            instance
+        );
+        await saveFlowState(from, 'ASK_MODALITY_FOR_PRICE');
         return true;
     }
 
@@ -262,26 +276,33 @@ export async function sendMainMenu(from: string, pushName: string, instance?: st
 }
 
 async function sendModalityDetails(from: string, modality: string, instance?: string) {
-    let details = "";
-    if (modality === 'street') details = "👟 *STREET DANCE*\n\n*KIDS (5+):* Seg/Qua 08h, 14h30, 19h\n*JUNIOR (12+):* Seg/Qua 19h\n*SENIOR (16+):* Seg/Qua 20h";
-    if (modality === 'jazz') details = "🦢 *JAZZ & CONTEMP.*\n\n*JAZZ (18+):* Seg/Qua 21h\n*JAZZ INICIANTE (18+):* Ter/Qui 20h\n*CONTEMPORÂNEO (12+):* Seg/Qua 19h";
-    if (modality === 'kpop') details = "🇰🇷 *K-POP (12+)*\n\nConsulte nossa grade especial XTAGE para horários de K-Pop!";
-    if (modality === 'ritmos') details = "💃 *RITMOS & FIT*\n\n*RITMOS (15+):* Ter/Qui 08h\n*FIT DANCE (15+):* Ter/Qui 19h";
-    if (modality === 'heels') details = "👠 *HEELS (15+)*\n\nConsulte nossos consultores para a grade atualizada de Heels!";
-    if (modality === 'lutas') details = "🥊 *LUTAS*\n\n*MUAY THAI (12+):* Ter/Qui 20h";
-    if (modality === 'teatro') details = "🎭 *TEATRO & ACROBACIA*\n\n*TEATRO (12+):* Ter/Qui 09h\n*TEATRO (15+):* Ter/Qui 15h30\n*ACROBACIA (12+):* Seg/Qua 20h";
-    if (modality === 'salao') details = "💃 *DANÇAS POPULARES*\n\n*POPULARES (12+):* Ter/Qui 14h";
+    // Carrega horários do arquivo JSON externo (fácil de atualizar sem deploy!)
+    let scheduleData: any = {};
+    try {
+        scheduleData = require('../data/schedule.json');
+    } catch (e) {
+        console.error('Erro ao carregar schedule.json:', e);
+    }
 
-    if (!details) details = "Ainda estamos atualizando os horários desta modalidade! 😅 Mas você pode perguntar para um de nossos consultores.";
+    const mod = scheduleData[modality];
+    let details = "";
+
+    if (mod) {
+        const turmasText = mod.turmas
+            .map((t: any) => `*${t.nivel}:* ${t.dias} ${t.horarios}`)
+            .join('\n');
+        details = `${mod.emoji} *${mod.nome}*\n\n${turmasText}`;
+    } else {
+        details = "Ainda estamos atualizando os horários desta modalidade! 😅 Mas você pode perguntar para um de nossos consultores.";
+    }
 
     await sendProfessionalMessage(from, details, instance);
     await saveFlowState(from, 'VIEW_MODALITY_DETAILS', { viewing: modality });
 
-    setTimeout(async () => {
-        await sendList(from, "Próximos Passos", "Gostou dos horários?", "O QUE FAZER?", [
-            { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
-        ], instance);
-    }, 2000);
+    await new Promise(r => setTimeout(r, 2000));
+    await sendList(from, "Próximos Passos", "Gostou dos horários?", "O QUE FAZER?", [
+        { title: "Ações", rows: [{ id: "final_booking", title: "📅 Agendar Aula", description: "Quero experimentar!" }, { id: "menu_menu", title: "🔙 Ver outras opções", description: "Voltar ao menu" }] }
+    ], instance);
 }
 
 export async function sendScheduleList(from: string, instance?: string) {
@@ -457,6 +478,70 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
                 }, 2000);
             }, 1500);
 
+            return true;
+        }
+
+        // ============================================
+        // FLUXO HUMANIZADO DE PREÇOS
+        // ============================================
+
+        // 5. Usuário perguntou preço -> esperando modalidade
+        if (step === 'ASK_MODALITY_FOR_PRICE') {
+            const modality = identifyModality(msgBody.toLowerCase()) || msgBody.trim();
+            const profile = await getStudentProfile(from);
+            const name = profile?.name || 'você';
+
+            await sendProfessionalMessage(from,
+                `Boa escolha! 🔥 **${modality.toUpperCase()}** é uma das modalidades mais procuradas!\n\n` +
+                `E me conta, ${name}: você já dançou antes ou seria sua primeira experiência? 💃`,
+                instance
+            );
+            await saveFlowState(from, 'ASK_INTEREST_FOR_PRICE', { modality });
+            return true;
+        }
+
+        // 6. Usuário respondeu experiência -> mostrar preços contextualizados
+        if (step === 'ASK_INTEREST_FOR_PRICE') {
+            const { modality } = currentState.data || {};
+            const profile = await getStudentProfile(from);
+            const name = profile?.name || 'você';
+
+            // Resposta carismática antes dos preços
+            await sendProfessionalMessage(from,
+                `Que demais, ${name}! 🤩\n\n` +
+                `Então vou te passar os valores. A gente tem planos flexíveis que cabem em qualquer rotina:\n`,
+                instance
+            );
+
+            await new Promise(r => setTimeout(r, 1500));
+
+            // Preços contextualizados
+            await sendProfessionalMessage(from,
+                `💰 *INVESTIMENTO XPACE (2026)* 🚀\n\n` +
+                `💎 *PASSE LIVRE (ilimitado):* R$ 350/mês\n` +
+                `✨ *2x NA SEMANA:*\n` +
+                `   • Mensal: R$ 215\n` +
+                `   • Semestral: R$ 195/mês\n` +
+                `   • Anual: R$ 165/mês (melhor custo-benefício!)\n\n` +
+                `E o melhor: a *primeira aula é experimental* pra você sentir a vibe! 🎉`,
+                instance
+            );
+
+            await new Promise(r => setTimeout(r, 2000));
+
+            // CTA final
+            await sendList(from, "Próximos Passos 🚀", "O que você gostaria de fazer agora?", "ESCOLHER OPÇÃO", [
+                {
+                    title: "Ações", rows: [
+                        { id: "final_booking", title: "📅 Agendar Experimental", description: "Quero experimentar!" },
+                        { id: "menu_schedule", title: "🗓️ Ver Grade de Horários", description: "Ver dias e horas" },
+                        { id: "menu_human", title: "🙋‍♂️ Falar com Consultor", description: "Tirar mais dúvidas" }
+                    ]
+                }
+            ], instance);
+
+            await saveFlowState(from, 'MENU_MAIN');
+            await notifySocios(`💰 LEAD VIU PREÇOS: Interessado em ${modality}\nCliente: ${name}`, { jid: from, name });
             return true;
         }
 

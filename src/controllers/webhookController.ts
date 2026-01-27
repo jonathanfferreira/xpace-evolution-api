@@ -111,20 +111,20 @@ async function handleMessageUpsert(req: Request, res: Response) {
             let selectedRowId = data.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
             const input = (selectedRowId || msgBody?.trim())?.toLowerCase();
 
-                // 1. HANDOFF DO DONO
-                if (data.key.fromMe) {
-                    const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
-                    if (text) {
-                        if (text.toLowerCase().trim() === '/bot') {
-                            await deleteFlowState(from);
-                            await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.", instanceName);
-                            return;
-                        }
-                        if (text.toLowerCase().trim() === '/stop') {
-                            await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
-                            await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.", instanceName);
-                            return;
-                        }
+            // 1. HANDOFF DO DONO
+            if (data.key.fromMe) {
+                const text = data.message?.conversation || data.message?.extendedTextMessage?.text;
+                if (text) {
+                    if (text.toLowerCase().trim() === '/bot') {
+                        await deleteFlowState(from);
+                        await sendProfessionalMessage(from, "🤖 Bot retomado! Voltei a comandar.", instanceName);
+                        return;
+                    }
+                    if (text.toLowerCase().trim() === '/stop') {
+                        await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
+                        await sendProfessionalMessage(from, "🛑 Bot pausado por 30min.", instanceName);
+                        return;
+                    }
                     // Auto-learning
                     console.log(`[HANDOFF] Intervenção humana detectada para ${from}.`);
                     await saveFlowState(from, 'HUMAN_INTERVENTION', { timestamp: Date.now() });
@@ -147,6 +147,17 @@ async function handleMessageUpsert(req: Request, res: Response) {
                     return;
                 } else {
                     await deleteFlowState(from);
+                    currentState = null; // Reset para continuar fluxo normal
+                }
+            }
+
+            // 3. TIMEOUT DE FLUXO (expirar estados antigos após 2 horas)
+            if (currentState?.data?.timestamp) {
+                const TWO_HOURS = 2 * 60 * 60 * 1000;
+                if (Date.now() - currentState.data.timestamp > TWO_HOURS) {
+                    console.log(`[TIMEOUT] Estado expirado para ${from}, limpando...`);
+                    await deleteFlowState(from);
+                    currentState = null;
                 }
             }
 
@@ -216,7 +227,7 @@ async function handleMessageUpsert(req: Request, res: Response) {
                     // Only use AI if NOT in a strict flow (like asking name)
                     if (!input?.startsWith('menu_') && !input?.startsWith('mod_')) {
                         const aiResponse = await generateResponse(from, msgBody);
-                        
+
                         // Se a IA respondeu, e estávamos no MENU_MAIN, limpamos o estado para não travar o usuário
                         if (currentState?.step === 'MENU_MAIN') {
                             await deleteFlowState(from);

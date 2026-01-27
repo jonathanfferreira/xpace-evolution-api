@@ -1,0 +1,125 @@
+{
+    "street": {
+        "nome": "STREET DANCE",
+        "emoji": "👟",
+        "turmas": [
+            {
+                "nivel": "KIDS (5+)",
+                "dias": "Seg/Qua",
+                "horarios": "08h, 14h30, 19h"
+            },
+            {
+                "nivel": "JUNIOR (12+)",
+                "dias": "Seg/Qua",
+                "horarios": "19h"
+            },
+            {
+                "nivel": "SENIOR (16+)",
+                "dias": "Seg/Qua",
+                "horarios": "20h"
+            }
+        ]
+    },
+    "jazz": {
+        "nome": "JAZZ & CONTEMP.",
+        "emoji": "🦢",
+        "turmas": [
+            {
+                "nivel": "JAZZ (18+)",
+                "dias": "Seg/Qua",
+                "horarios": "21h"
+            },
+            {
+                "nivel": "JAZZ INICIANTE (18+)",
+                "dias": "Ter/Qui",
+                "horarios": "20h"
+            },
+            {
+                "nivel": "CONTEMPORÂNEO (12+)",
+                "dias": "Seg/Qua",
+                "horarios": "19h"
+            }
+        ]
+    },
+    "kpop": {
+        "nome": "K-POP",
+        "emoji": "🇰🇷",
+        "turmas": [
+            {
+                "nivel": "K-POP (12+)",
+                "dias": "Consulte",
+                "horarios": "Grade XTAGE"
+            }
+        ]
+    },
+    "ritmos": {
+        "nome": "RITMOS & FIT",
+        "emoji": "💃",
+        "turmas": [
+            {
+                "nivel": "RITMOS (15+)",
+                "dias": "Ter/Qui",
+                "horarios": "08h"
+            },
+            {
+                "nivel": "FIT DANCE (15+)",
+                "dias": "Ter/Qui",
+                "horarios": "19h"
+            }
+        ]
+    },
+    "heels": {
+        "nome": "HEELS",
+        "emoji": "👠",
+        "turmas": [
+            {
+                "nivel": "HEELS (15+)",
+                "dias": "Consulte",
+                "horarios": "Grade atualizada"
+            }
+        ]
+    },
+    "lutas": {
+        "nome": "LUTAS",
+        "emoji": "🥊",
+        "turmas": [
+            {
+                "nivel": "MUAY THAI (12+)",
+                "dias": "Ter/Qui",
+                "horarios": "20h"
+            }
+        ]
+    },
+    "teatro": {
+        "nome": "TEATRO & ACROBACIA",
+        "emoji": "🎭",
+        "turmas": [
+            {
+                "nivel": "TEATRO (12+)",
+                "dias": "Ter/Qui",
+                "horarios": "09h"
+            },
+            {
+                "nivel": "TEATRO (15+)",
+                "dias": "Ter/Qui",
+                "horarios": "15h30"
+            },
+            {
+                "nivel": "ACROBACIA (12+)",
+                "dias": "Seg/Qua",
+                "horarios": "20h"
+            }
+        ]
+    },
+    "salao": {
+        "nome": "DANÇAS POPULARES",
+        "emoji": "💃",
+        "turmas": [
+            {
+                "nivel": "POPULARES (12+)",
+                "dias": "Ter/Qui",
+                "horarios": "14h"
+            }
+        ]
+    }
+}
