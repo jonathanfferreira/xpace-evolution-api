@@ -321,7 +321,7 @@ export async function handleQuizResponse(msgBody: string, from: string, currentS
 
         // 2. Resposta da Idade
         if (step === 'ASK_AGE') {
-        const age = parseInt(msgBody.replace(/\D/g, ''));
+            const age = parseInt(msgBody.replace(/\D/g, ''));
         const name = currentState.data?.name || 'Aluno';
 
         if (!age || isNaN(age)) {
