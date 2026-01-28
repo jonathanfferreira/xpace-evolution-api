@@ -3,11 +3,13 @@
 
 import axios from 'axios';
 import * as fs from 'fs';
+import * as path from 'path';
+import { config } from '../src/config';
 
-// Configuração
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8080';
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 'B6D711FCDE4D4FD5936544120E713976';
-const INSTANCE_NAME = process.env.INSTANCE_NAME || 'xpace';
+// Configuração da Evolution API (importada do projeto)
+const EVOLUTION_API_URL = config.evolutionApi.serverUrl;
+const EVOLUTION_API_KEY = config.evolutionApi.apiKey;
+const INSTANCE_NAME = config.evolutionApi.instance;
 
 // Intervalo entre mensagens (10-15 segundos - randomizado para parecer mais natural)
 const MIN_INTERVAL = 10000; // 10 segundos
@@ -15,7 +17,7 @@ const MAX_INTERVAL = 15000; // 15 segundos
 
 // Lista de números (formato: apenas números, sem formatação)
 // Exemplo: ['5547999999999', '5547888888888']
-const CONTACTS_FILE = './contacts_az.json';
+const CONTACTS_FILE = path.join(__dirname, 'contacts_az.json');
 
 // Mensagem a ser enviada
 const MESSAGE = `Bom dia! Tudo bem? 😊
@@ -37,10 +39,10 @@ Já estamos com as matrículas abertas para:
 Como muitos pais nos consultaram sobre essas modalidades específicas, as vagas estão sendo preenchidas por ordem de procura. Se você tiver interesse em algum desses horários, me avise por aqui para eu te enviar a tabela detalhada! 🩰✨
 
 🌐 xpacecompany.com
-📸 @xpaceescoladedanca`;
+📸 instagram.com/xpaceescoladedanca`;
 
 // Log file
-const LOG_FILE = './bulk_send_log.json';
+const LOG_FILE = path.join(__dirname, 'bulk_send_log.json');
 
 interface SendResult {
     number: string;
