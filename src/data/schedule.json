@@ -1,4 +1,57 @@
 {
+    "ballet": {
+        "nome": "BALLET",
+        "emoji": "🩰",
+        "turmas": [
+            {
+                "nivel": "BABY CLASS (3+)",
+                "dias": "Ter/Qui",
+                "horarios": "15h30"
+            },
+            {
+                "nivel": "INICIANTE (12+)",
+                "dias": "Ter/Qui",
+                "horarios": "21h"
+            },
+            {
+                "nivel": "INFANTIL (6-10)",
+                "dias": "Consulte",
+                "horarios": "Novos horários em breve"
+            }
+        ]
+    },
+    "sapateado": {
+        "nome": "SAPATEADO",
+        "emoji": "👞",
+        "turmas": [
+            {
+                "nivel": "INICIANTE",
+                "dias": "Consulte",
+                "horarios": "Novos horários em breve"
+            },
+            {
+                "nivel": "INTER/AVANÇADO",
+                "dias": "Consulte",
+                "horarios": "Novos horários em breve"
+            }
+        ]
+    },
+    "competicao": {
+        "nome": "CIA DE COMPETIÇÃO",
+        "emoji": "🏆",
+        "turmas": [
+            {
+                "nivel": "CIA HEELS",
+                "dias": "Sábado",
+                "horarios": "14h / 15h"
+            },
+            {
+                "nivel": "CIA DANÇAS POPULARES",
+                "dias": "Sábado",
+                "horarios": "14h30 / 15h30"
+            }
+        ]
+    },
     "street": {
         "nome": "STREET DANCE",
         "emoji": "👟",

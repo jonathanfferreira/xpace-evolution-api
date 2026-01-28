@@ -252,15 +252,18 @@ export async function handleMenuSelection(input: string, from: string, pushName:
 // ----------------------------------------------------
 
 function identifyModality(text: string): string {
-    if (text.includes('street') || text.includes('urbana') || text.includes('funk')) return 'street';
+    if (text.includes('street') || text.includes('urbana') || text.includes('funk') || text.includes('hip hop') || text.includes('hiphop')) return 'street';
     if (text.includes('jazz') || text.includes('contempor')) return 'jazz';
     if (text.includes('k-pop') || text.includes('kpop')) return 'kpop';
-    if (text.includes('ritmos') || text.includes('ballet')) return 'ritmos';
+    if (text.includes('ballet') || text.includes('balé') || text.includes('baby class') || text.includes('babyclass')) return 'ballet';
+    if (text.includes('ritmos')) return 'ritmos';
     if (text.includes('teatro') || text.includes('acrobacia')) return 'teatro';
     if (text.includes('heels') || text.includes('salto')) return 'heels';
     if (text.includes('luta') || text.includes('muay') || text.includes('jiu')) return 'lutas';
     if (text.includes('populares') || text.includes('culture') || text.includes('hall')) return 'populares';
     if (text.includes('salao') || text.includes('salão') || text.includes('gafieira')) return 'salao';
+    if (text.includes('sapateado') || text.includes('tap')) return 'sapateado';
+    if (text.includes('competi') || text.includes('cia') || text.includes('performance')) return 'competicao';
     return "";
 }
 
@@ -318,11 +321,12 @@ export async function sendScheduleList(from: string, instance?: string) {
             {
                 title: "Modalidades",
                 rows: [
-                    { id: "mod_street", title: "👟 Street / Urban", description: "Kids, Teens, Adulto" },
+                    { id: "mod_street", title: "👟 Street / Hip Hop", description: "Kids, Teens, Adulto" },
+                    { id: "mod_ballet", title: "🩰 Ballet", description: "Baby Class, Infantil, Adulto" },
                     { id: "mod_jazz", title: "🦢 Jazz / Contemp.", description: "Técnico, Funk, Lyrical" },
                     { id: "mod_kpop", title: "🇰🇷 K-Pop", description: "Coreografias" },
                     { id: "mod_ritmos", title: "💃 Ritmos / Fit", description: "Energia e Bem-estar" },
-                    { id: "mod_outros", title: "✨ Ver Todas", description: "Heels, Lutas, Ballet, etc" },
+                    { id: "mod_outros", title: "✨ Ver Todas", description: "Sapateado, Cia, Lutas..." },
                 ]
             }
         ], instance
@@ -363,6 +367,8 @@ async function sendOtherModalities(from: string, instance?: string) {
         {
             title: "Mais Opções",
             rows: [
+                { id: "mod_sapateado", title: "👞 Sapateado", description: "Tap Dance" },
+                { id: "mod_competicao", title: "🏆 Cia Competição", description: "Performance e palcos" },
                 { id: "mod_heels", title: "👠 Heels", description: "Dança no salto" },
                 { id: "mod_lutas", title: "🥊 Lutas", description: "Muay Thai e Jiu Jitsu" },
                 { id: "mod_teatro", title: "🎭 Teatro/Acro", description: "Expressão e movimento" },
